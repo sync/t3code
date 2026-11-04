@@ -362,3 +362,84 @@ passed as `--wsl-runtime`; see the
 Add `--signed` after configuring the platform credentials in the
 [release runbook](./release.md). macOS passkeys need a signed, provisioned app; follow the
 [Connect setup](./connect-setup.md#desktop-passkeys) for local signing and renderer HMR.
+
+### Local macOS signing for LAN access
+
+macOS Local Network privacy uses the responsible app's code identity, including for its child
+processes. An ad hoc desktop build can get `EHOSTUNREACH` for a LAN address while the same request
+works from Terminal, even with T3 Code's Local Network permission enabled. Signing with a stable
+Developer ID Application identity resolved this for a local Simlock gateway. Use the same identity
+for subsequent builds, install in Applications, fully quit and reopen T3 Code, and allow Local
+Network access if macOS asks. See Apple's [TN3179](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+
+For a personal Apple Silicon build without the release passkey provisioning profile, build an
+unsigned app directory, sign its nested code with the installed Developer ID certificate, then
+create the DMG. This procedure does not configure macOS passkeys or notarize the app. The full
+`--signed` release build still requires the provisioning and Clerk configuration above.
+
+From the repository root, after `vp i`, find your certificate and build:
+
+```sh
+security find-identity -v -p codesigning
+T3CODE_DESKTOP_SIGNED=false vp run dist:desktop:artifact \
+  --platform mac --target dir --arch arm64 --output-dir release/local-macos
+export T3_LOCAL_SIGN_IDENTITY='Developer ID Application: Your Name (YOURTEAMID)'
+export T3_LOCAL_APP="$PWD/release/local-macos/mac-arm64/T3 Code (Beta).app"
+export T3_LOCAL_SIGN_WORK=$(mktemp -d)
+```
+
+Replace the identity with the Developer ID Application name from `security`. Use the app directory
+printed by the build if its channel or output layout differs. Sign before creating the DMG:
+
+```sh
+cat > "$T3_LOCAL_SIGN_WORK/entitlements.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+  <key>com.apple.security.cs.disable-library-validation</key><true/>
+  <key>com.apple.security.device.camera</key><true/>
+  <key>com.apple.security.device.audio-input</key><true/>
+</dict></plist>
+PLIST
+
+node --input-type=module <<'JS'
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+const require = createRequire(pathToFileURL(`${process.cwd()}/scripts/package.json`));
+const { sign } = await import(pathToFileURL(require.resolve('@electron/osx-sign')).href);
+await sign({
+  app: process.env.T3_LOCAL_APP,
+  identity: process.env.T3_LOCAL_SIGN_IDENTITY,
+  platform: 'darwin',
+  type: 'distribution',
+  preAutoEntitlements: false,
+  preEmbedProvisioningProfile: false,
+  batchCodesignCalls: true,
+  strictVerify: true,
+  optionsForFile: () => ({
+    entitlements: `${process.env.T3_LOCAL_SIGN_WORK}/entitlements.plist`,
+    hardenedRuntime: true,
+  }),
+});
+JS
+
+codesign --verify --deep --strict "$T3_LOCAL_APP"
+codesign -dv --verbose=2 "$T3_LOCAL_APP"
+mkdir "$T3_LOCAL_SIGN_WORK/installer"
+ditto "$T3_LOCAL_APP" "$T3_LOCAL_SIGN_WORK/installer/$(basename "$T3_LOCAL_APP")"
+ln -s /Applications "$T3_LOCAL_SIGN_WORK/installer/Applications"
+hdiutil create -volname 'T3 Code Local Signed' \
+  -srcfolder "$T3_LOCAL_SIGN_WORK/installer" -format UDZO \
+  -ov release/T3-Code-arm64-local-signed.dmg
+codesign --sign "$T3_LOCAL_SIGN_IDENTITY" --timestamp release/T3-Code-arm64-local-signed.dmg
+codesign --verify --strict release/T3-Code-arm64-local-signed.dmg
+hdiutil verify release/T3-Code-arm64-local-signed.dmg
+open release/T3-Code-arm64-local-signed.dmg
+```
+
+Check that `codesign -dv` reports your Developer ID authority and TeamIdentifier. Signing only the
+DMG does not give the app a stable identity; the nested helpers, frameworks, and native modules
+also need signatures. The Electron signer handles these before signing the outer app. Keep the
+installed app closed while replacing it, then retest the direct LAN connection from T3 Code.
