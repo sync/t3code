@@ -1494,6 +1494,7 @@ export default function FilePreviewPanel({
             environmentId === hostEnvironmentId ||
             remoteOpenState.mode !== "local-exec") ? (
             <OpenInPicker
+              mode="file"
               environmentId={environmentId}
               keybindings={keybindings}
               availableEditors={availableEditors}

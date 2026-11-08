@@ -1,5 +1,6 @@
 import {
   DEFAULT_SERVER_SETTINGS,
+  type EditorId,
   type EnvironmentId,
   type EnvironmentTheme,
   type ServerConfig,
@@ -163,6 +164,16 @@ export const primaryServerKeybindingsAtom = createShortcutKeybindingsAtom({
   primaryConfigAtom: primaryServerConfigAtom,
   environmentsAtom: environmentConnectionsAtom,
 }).pipe(Atom.withLabel("web-primary-server-keybindings"));
+
+const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
+
+export const environmentAvailableEditorsAtom = Atom.family((environmentId: EnvironmentId) =>
+  Atom.make(
+    (get): ReadonlyArray<EditorId> =>
+      get(serverEnvironment.configValueAtom(environmentId))?.availableEditors ??
+      EMPTY_AVAILABLE_EDITORS,
+  ).pipe(Atom.withLabel(`web-environment-available-editors:${environmentId}`)),
+);
 
 const EMPTY_ENVIRONMENT_THEMES: ReadonlyArray<EnvironmentTheme> = [];
 
