@@ -7,6 +7,7 @@ import {
   CursorIcon,
   FileExplorerIcon,
   FinderIcon,
+  GhosttyIcon,
   type Icon,
   KiroIcon,
   TraeIcon,
@@ -79,6 +80,7 @@ export function editorIconOptions(platform: string): ReadonlyArray<EditorIconOpt
       value: "antigravity",
       kind: "brand",
     },
+    { Icon: GhosttyIcon, value: "ghostty", kind: "brand" },
     {
       Icon: IntelliJIdeaIcon,
       value: "idea",

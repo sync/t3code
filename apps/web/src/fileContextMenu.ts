@@ -10,6 +10,7 @@ import {
 
 import { contextMenuSourceOf } from "./contextMenuSource";
 import { resolveDiffPathForWorkspace } from "./diffFileActions";
+import { availableFileEditors } from "./editorPreferences";
 import {
   revealInFileExplorerLabelForKind,
   revealInFileExplorerLabelForOs,
@@ -125,7 +126,7 @@ export function useFileContextMenu(environmentId: EnvironmentId | null) {
   const remoteHost = remoteOpen.state.mode === "remote-links" ? remoteOpen.state.host : null;
 
   const availableEditors = isLocalExec
-    ? (serverConfig?.availableEditors ?? [])
+    ? availableFileEditors(serverConfig?.availableEditors ?? [])
     : mode === "remote-links"
       ? remoteCapableEditors
       : [];

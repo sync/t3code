@@ -8,6 +8,7 @@ import { resolveShortcutCommand } from "../keybindings";
 import { primaryEnvironmentIdAtom } from "./primaryEnvironment";
 import {
   createShortcutKeybindingsAtom,
+  environmentAvailableEditorsAtom,
   primaryRelayTracingAllowedAtom,
   serverEnvironment,
 } from "./server";
@@ -72,6 +73,21 @@ function makeHarness(input: {
 const registries: AtomRegistry.AtomRegistry[] = [];
 afterEach(() => {
   for (const registry of registries.splice(0)) registry.dispose();
+});
+
+it("reads installed apps from the destination environment instead of the primary", () => {
+  const primaryConfig = Atom.make({ ...config([]), availableEditors: ["idea"] } as ServerConfig);
+  const destinationConfig = Atom.make({
+    ...config([]),
+    availableEditors: ["ghostty", "file-manager"],
+  } as ServerConfig);
+  using _config = vi
+    .spyOn(serverEnvironment, "configValueAtom")
+    .mockImplementation((id) => (id === PRIMARY ? primaryConfig : destinationConfig));
+  const registry = AtomRegistry.make({ initialValues: [[primaryEnvironmentIdAtom, PRIMARY]] });
+  using _registry = { [Symbol.dispose]: () => registry.dispose() };
+  expect(registry.get(environmentAvailableEditorsAtom(A))).toEqual(["ghostty", "file-manager"]);
+  expect(registry.get(environmentAvailableEditorsAtom(PRIMARY))).toEqual(["idea"]);
 });
 
 describe("createShortcutKeybindingsAtom", () => {

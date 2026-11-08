@@ -267,7 +267,11 @@ import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/
 import { useEnvironmentQueryRefresh } from "../state/query";
 import { revisionedQuery } from "../state/revisionedQuery";
 import { useEnvironmentScope } from "~/state/session";
-import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
+import {
+  environmentAvailableEditorsAtom,
+  primaryServerKeybindingsAtom,
+  serverEnvironment,
+} from "../state/server";
 import { hostEnvironmentIdAtom } from "../state/primaryEnvironment";
 import { threadEnvironment } from "../state/threads";
 import {
@@ -1801,8 +1805,7 @@ export default function ChatView(props: ChatViewProps) {
     useAtomValue(serverEnvironment.configValueAtom(environmentId))?.keybindings ??
     DEFAULT_RESOLVED_KEYBINDINGS;
   const openInEnvironmentId = activeThread?.environmentId ?? environmentId;
-  const availableEditors =
-    useAtomValue(serverEnvironment.configValueAtom(openInEnvironmentId))?.availableEditors ?? [];
+  const availableEditors = useAtomValue(environmentAvailableEditorsAtom(openInEnvironmentId));
   const hostEnvironmentId = useAtomValue(hostEnvironmentIdAtom);
   const remoteOpenState = useRemoteOpenState(openInEnvironmentId);
   const showOpenInPicker = shouldShowOpenInPicker({

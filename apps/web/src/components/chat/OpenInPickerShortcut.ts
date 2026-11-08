@@ -1,4 +1,5 @@
 import {
+  AuthOrchestrationOperateScope,
   buildRemoteOpenUrl,
   type EditorId,
   type EnvironmentId,
@@ -7,7 +8,7 @@ import {
 import { msg } from "gt-react";
 import { useEffect } from "react";
 
-import { usePreferredEditor } from "../../editorPreferences";
+import { usePreferredProjectOpener } from "../../editorPreferences";
 import { editorLabelForPlatform } from "../../editorLabels";
 import { isOpenFavoriteEditorShortcut } from "../../keybindings";
 import { m } from "../../i18n/messages";
@@ -16,6 +17,7 @@ import { openRemoteEditorUrl, useRemoteCapableEditors, useRemoteOpenState } from
 import { registerCommands } from "../../shortcuts/dispatcher";
 import { shellEnvironment } from "../../state/shell";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { useEnvironmentScope } from "../../state/session";
 
 /** Marks an OpenInPicker's primary button as the target of `editor.openFavorite`. */
 export const OPEN_FAVORITE_EDITOR_ATTRIBUTE = "data-open-favorite-editor";
@@ -58,14 +60,21 @@ export function useOpenFavoriteEditorShortcut({
   const openInEditorMutation = useAtomCommand(shellEnvironment.openInEditor, "open in editor");
   const remote = useRemoteOpenState(environmentId);
   const remoteCapableEditors = useRemoteCapableEditors();
-  // Matches the picker: remote editors run on the viewing machine.
-  const [preferredEditor] = usePreferredEditor(
-    remote.mode === "local-exec" ? availableEditors : remoteCapableEditors,
-  );
+  const canOperateHost = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
+  const canOpenGhostty = canOperateHost && availableEditors.includes("ghostty");
+  const effectiveEditors =
+    remote.mode === "local-exec"
+      ? availableEditors
+      : remote.mode === "remote-unavailable" && canOpenGhostty
+        ? ["ghostty" as const]
+        : canOpenGhostty
+          ? [...remoteCapableEditors, "ghostty" as const]
+          : remoteCapableEditors;
+  const [preferredEditor] = usePreferredProjectOpener(effectiveEditors);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a window keydown listener for the open-in-editor shortcut while enabled
   useEffect(() => {
-    if (!enabled || remote.mode === "remote-unavailable") return;
+    if (!enabled || (remote.mode === "remote-unavailable" && preferredEditor !== "ghostty")) return;
     const handler = (event: globalThis.KeyboardEvent) => {
       if (
         event.repeat ||
@@ -77,7 +86,7 @@ export function useOpenFavoriteEditorShortcut({
 
       event.preventDefault();
       const label = editorLabelForPlatform(preferredEditor, navigator.platform);
-      if (remote.mode === "remote-links") {
+      if (preferredEditor !== "ghostty" && remote.mode === "remote-links") {
         const url = buildRemoteOpenUrl({
           editor: preferredEditor,
           ...remote.host,
