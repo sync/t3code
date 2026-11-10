@@ -45,6 +45,7 @@ import {
   type ThreadStructure,
   type ThreadStructureRuntime,
   type ThreadStructureTurnItem,
+  type EnvironmentThreadShell,
 } from "./models.ts";
 import { commandDisplayText } from "../work-log/commandLabel.ts";
 import { formatSubagentDisplayTitle } from "./subagentDisplay.ts";
@@ -56,6 +57,17 @@ const PROVIDER_STARTING_RUN_STATUSES = new Set(["starting", "running"]);
 
 const EMPTY_EXTENSION_STATUSES: NonNullable<OrchestrationV2ProviderSession["extensionStatuses"]> =
   [];
+
+export function isThreadModelLocked(
+  enabled: boolean,
+  thread: Pick<EnvironmentThreadShell, "latestRun" | "itemCount" | "runtime"> | null | undefined,
+) {
+  return Boolean(
+    enabled &&
+    thread &&
+    (thread.latestRun !== null || thread.itemCount > 0 || thread.runtime !== null),
+  );
+}
 
 /** Only the selected provider's current session can supply transient extension status. */
 export function deriveProviderExtensionStatuses(

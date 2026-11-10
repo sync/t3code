@@ -5,6 +5,7 @@ import type {
   ProjectScript,
   ResolvedKeybindingsConfig,
   ThreadId,
+  ServerProvider,
 } from "@t3tools/contracts";
 
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -44,6 +45,8 @@ import {
   THREAD_DETAILS_PANEL_LABEL_CLASS,
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
+import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
+import { THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS } from "./threadDetailsPanelStyles";
 
 const GitActionsControl = memo(BaseGitActionsControl);
 
@@ -91,6 +94,7 @@ interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   usage: ThreadDetailsUsageInput;
+  model: { provider: ServerProvider | undefined; label: string; effort: string | null } | null;
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -286,6 +290,34 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               ) : null}
 
               {visible.usage ? <ThreadDetailsUsage {...props.usage} /> : null}
+
+              {props.model ? (
+                <ThreadDetailsSection
+                  title="Model"
+                  headingId="thread-details-model-heading"
+                  showHeading={false}
+                >
+                  <div
+                    className={cn("flex items-center", THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS)}
+                    aria-label={`Locked model: ${props.model.label}${props.model.effort ? `, ${props.model.effort}` : ""}`}
+                  >
+                    {props.model.provider ? (
+                      <ProviderInstanceIcon
+                        driverKind={props.model.provider.driver}
+                        displayName={
+                          props.model.provider.displayName ?? props.model.provider.instanceId
+                        }
+                        className="size-4 shrink-0"
+                        iconClassName="size-4"
+                      />
+                    ) : null}
+                    <span className="min-w-0 truncate">{props.model.label}</span>
+                    {props.model.effort ? (
+                      <span className="shrink-0 text-muted-foreground">{props.model.effort}</span>
+                    ) : null}
+                  </div>
+                </ThreadDetailsSection>
+              ) : null}
 
               {visible.context && props.usage.contextWindow ? (
                 <ThreadDetailsContext usage={props.usage.contextWindow} />

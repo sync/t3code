@@ -33,6 +33,8 @@ import {
 
 export function SettingsLabsRouteScreen() {
   const insets = useSafeAreaInsets();
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
 
   return (
     <SettingsScreen title="Labs">
@@ -43,6 +45,18 @@ export function SettingsLabsRouteScreen() {
         contentContainerClassName="gap-6 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
+        <SettingsSection title="Threads">
+          <SettingsSwitchRow
+            icon="gearshape"
+            label="Lock model after thread starts"
+            subtitle="Keep the model and reasoning settings fixed after the first message. Turn this off to change them again."
+            value={
+              AsyncResult.isSuccess(preferences) &&
+              preferences.value.lockThreadModelAfterStart === true
+            }
+            onValueChange={(value) => savePreferences({ lockThreadModelAfterStart: value })}
+          />
+        </SettingsSection>
         <MachineBetaSection
           title="Linked environments"
           icon="link"

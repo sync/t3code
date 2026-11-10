@@ -495,7 +495,6 @@ export const OpenInPicker = memo(function OpenInPicker({
         <GroupSeparator {...(!compact ? { className: "hidden @3xl/header-actions:block" } : {})} />
       )}
       <Menu open={menuOpen} onOpenChange={setMenuOpen}>
-<<<<<<< HEAD
         <Tooltip>
           <TooltipTrigger
             render={
@@ -503,7 +502,7 @@ export const OpenInPicker = memo(function OpenInPicker({
                 disabled={isHostEditorDenied}
                 render={
                   <ThreadDetailsControl
-                    aria-label="Choose editor"
+                    aria-label={mode === "project" ? "Choose project app" : "Choose editor"}
                     data-toolbar-control=""
                     size={isPanel ? "sm" : "icon-xs"}
                     variant={isPanel ? "ghost" : "outline"}
@@ -517,20 +516,11 @@ export const OpenInPicker = memo(function OpenInPicker({
             <ChevronDownIcon
               aria-hidden="true"
               className={isPanel ? THREAD_DETAILS_PANEL_CHEVRON_CLASS : "size-4"}
-=======
-        <MenuTrigger
-          disabled={isHostEditorDenied}
-          render={
-            <ThreadDetailsControl
-              aria-label={mode === "project" ? "Choose project app" : "Choose editor"}
-              size={isPanel ? "sm" : "icon-xs"}
-              variant={isPanel ? "ghost" : "outline"}
-              part="secondary"
-              panel={isPanel}
->>>>>>> b46eceb6da (feat: open project directories in Ghostty)
             />
           </TooltipTrigger>
-          <TooltipPopup side="top">Choose editor</TooltipPopup>
+          <TooltipPopup side="top">
+            {mode === "project" ? "Choose project app" : "Choose editor"}
+          </TooltipPopup>
         </Tooltip>
         <MenuPopup
           align="end"

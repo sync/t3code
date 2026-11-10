@@ -9,7 +9,7 @@ import { AppRoot } from "~/AppRoot";
 // The route loads ChatView lazily, and its first transform (React Compiler over ~4k lines)
 // takes 6-11s; importing it here keeps that out of the test's timeout.
 import "~/components/ChatView";
-import { __setClientSettingsForTests } from "~/hooks/useSettings";
+import { __setClientSettingsForTests, persistClientSettingsPatch } from "~/hooks/useSettings";
 import { getRouter } from "~/router";
 import {
   ENVIRONMENT_ID,
@@ -36,7 +36,7 @@ vi.mock(import("~/rpc/requestLatencyState"), async (original) => ({
 }));
 
 // Its own file: the app's shell subscription outlives a test, and it must list this thread.
-it("a model picked for an existing thread reaches the server before any message is sent", async () => {
+it("only an unlocked model pick for an existing thread reaches the server before a message is sent", async () => {
   const stored = {
     instanceId: ProviderInstanceId.make("codex"),
     model: "gpt-5.4",
@@ -65,6 +65,20 @@ it("a model picked for an existing thread reaches the server before any message 
   const modelSets = () =>
     dispatchedCommands().filter((command) => command.type === "thread.model-selection.set");
 
+  await page.getByRole("button", { name: "GPT-5.4", exact: true }).click();
+  await expect.element(page.getByRole("option", { name: /GPT-5\.5/ })).toBeVisible();
+  await persistClientSettingsPatch({ lockThreadModelAfterStart: true });
+  await expect
+    .element(page.getByRole("button", { name: "GPT-5.4", exact: true }))
+    .not.toBeInTheDocument();
+  await expect.element(page.getByRole("option", { name: /GPT-5\.5/ })).not.toBeInTheDocument();
+  await expect.element(page.getByLabelText(/^Locked model: GPT-5\.4/)).toBeVisible();
+  await expect.element(page.getByRole("button", { name: /^Permissions:/ })).toBeVisible();
+  expect(
+    dispatchedCommands().filter((command) => command.type === "thread.model-selection.set"),
+  ).toEqual([]);
+
+  await persistClientSettingsPatch({ lockThreadModelAfterStart: false });
   await page.getByRole("button", { name: "GPT-5.4", exact: true }).click();
   await page.getByRole("option", { name: /GPT-5\.5/ }).click();
   await vi.waitFor(() =>

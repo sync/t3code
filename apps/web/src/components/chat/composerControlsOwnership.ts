@@ -1,20 +1,22 @@
 /**
  * Where the permissions chip shows, whether the mode block overflows, and which control answers
- * the composer.mode shortcut. The model picker's footer always holds Permissions, so the chip
- * only shows while the mode differs from the default. The rule: composer.mode has one target.
+ * the composer.mode shortcut. Without the model picker, the chip keeps Permissions reachable;
+ * otherwise it only shows while the mode differs from the default. composer.mode has one target.
  */
 export function resolveComposerControlsOwnership(input: {
-  /** Permissions hide while the mode is the default, or while the new-thread strip names it. */
+  /** With the model picker present, permissions hide while the mode matches the default. */
   readonly matchesDefault: boolean;
+  readonly modelPickerHidden?: boolean;
   readonly collapsed: boolean;
   /** How many trailing blocks the width measurement moved into the overflow menu. */
   readonly measuredHiddenBlockCount: number;
 }) {
-  const accessDisplay = input.matchesDefault
-    ? ("hidden" as const)
-    : input.collapsed
-      ? ("icon" as const)
-      : ("label" as const);
+  const accessDisplay =
+    input.matchesDefault && !input.modelPickerHidden
+      ? ("hidden" as const)
+      : input.collapsed
+        ? ("icon" as const)
+        : ("label" as const);
   const showModeBlock = accessDisplay !== "hidden";
   const modeHidden = showModeBlock && input.measuredHiddenBlockCount > 0;
   const hiddenBlockIds = modeHidden ? (["mode"] as const) : ([] as const);

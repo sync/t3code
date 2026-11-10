@@ -17,6 +17,11 @@ describe("resolveComposerControlsOwnership", () => {
       hiddenBlockIds: [],
       pickerOwnsModeShortcut: true,
     });
+    expect(resolveComposerControlsOwnership({ ...base, modelPickerHidden: true })).toMatchObject({
+      showModeBlock: true,
+      pickerOwnsModeShortcut: false,
+      accessDisplay: "label",
+    });
   });
 
   it("shows a labelled chip that owns composer.mode when the mode differs", () => {

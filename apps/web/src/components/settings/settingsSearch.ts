@@ -472,6 +472,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta folders project tree classic sidebar"],
   },
   {
+    id: "lock-thread-model",
+    title: "Lock model after thread starts",
+    to: "/settings/labs",
+    searchTerms: ["beta model reasoning effort provider lock readonly composer thread details"],
+  },
+  {
     id: "boring-sidebar-multiline",
     title: "Two-line folder rows",
     to: "/settings/labs",

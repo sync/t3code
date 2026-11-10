@@ -11,6 +11,7 @@ import {
   RunId,
   RuntimeRequestId,
   ThreadId,
+  EnvironmentId,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2RunStatus,
   type OrchestrationV2RuntimeRequest,
@@ -20,7 +21,8 @@ import { createModelCapabilities, createModelSelection } from "@t3tools/shared/m
 import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import { describe, expect, it } from "vite-plus/test";
 
-import { v2Projection } from "./orchestrationV2TestFixtures.ts";
+import { v2Projection, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
+import { presentThreadShell } from "./models.ts";
 import {
   canResumeThread,
   deriveReportedModelSelection,
@@ -37,6 +39,7 @@ import {
   presentProviderGoal,
   presentRunStop,
   threadRuntimeHasInterruptibleRun,
+  isThreadModelLocked,
 } from "./threadExecution.ts";
 
 const now = DateTime.makeUnsafe("2026-07-28T10:00:00.000Z");
@@ -79,6 +82,21 @@ function run(id: string, ordinal: number, status: OrchestrationV2RunStatus) {
 }
 
 describe("thread execution presentation", () => {
+  it.each([
+    { enabled: false, itemCount: 1, latestRun: null, runtime: null, locked: false },
+    { enabled: true, itemCount: 0, latestRun: null, runtime: null, locked: false },
+    { enabled: true, itemCount: 1, latestRun: null, runtime: null, locked: true },
+  ])("locks models only in started threads when enabled: %o", ({ enabled, locked, ...thread }) => {
+    expect(isThreadModelLocked(enabled, thread)).toBe(locked);
+    expect(isThreadModelLocked(enabled, null)).toBe(false);
+    const shell = presentThreadShell(EnvironmentId.make("test"), {
+      ...v2ThreadShell,
+      itemCount: 0,
+      latestRunId: RunId.make("started"),
+    });
+    expect(isThreadModelLocked(enabled, shell)).toBe(enabled);
+    expect(isThreadModelLocked(enabled, { ...shell, latestRun: null })).toBe(enabled);
+  });
   it("shows extension statuses only from the selected provider's current live session", () => {
     const instanceId = v2Projection.thread.modelSelection.instanceId;
     const providerThreadId = ProviderThreadId.make("native-status-thread");

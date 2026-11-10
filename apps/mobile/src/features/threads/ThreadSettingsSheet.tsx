@@ -91,6 +91,7 @@ import {
 import { useQuietThreadStructure } from "../../state/use-thread-detail";
 import { activeComposerDraftKey, useQueuedRunEdit } from "../../state/queued-run-edit";
 import { selectThreadModel } from "../../state/thread-model-selection";
+import { isThreadModelLocked } from "@t3tools/client-runtime/state/thread-execution";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { providerWorkspaceSnapshotRefresh } from "../../state/provider-workspace-snapshot-refresh";
@@ -262,6 +263,7 @@ type ThreadSettingsSubmenuPage =
   | { readonly kind: "runtime" };
 
 type ThreadSettingsSessionProps = {
+  readonly modelLocked?: boolean;
   readonly environmentId: EnvironmentId | null;
   readonly projectId: ProjectId | null;
   readonly cwd: string | null;
@@ -288,6 +290,7 @@ export type ExistingThreadSettingsRouteParams = {
 };
 
 type ThreadSettingsSessionValue = {
+  readonly modelLocked: boolean;
   readonly environmentId: EnvironmentId | null;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
@@ -485,7 +488,8 @@ function ThreadSettingsSessionProvider(
   const [providerExpansionOverrides, setProviderExpansionOverrides] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [pendingModel, setPendingModel] = useState<ModelOption | null>(null);
+  const [pendingModelSelection, setPendingModel] = useState<ModelOption | null>(null);
+  const pendingModel = props.modelLocked ? null : pendingModelSelection;
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const displayedPrompt = pendingModel ? (pendingPrompt ?? props.prompt) : props.prompt;
 
@@ -495,12 +499,14 @@ function ThreadSettingsSessionProvider(
   const isDisplayed = (option: ModelOption) =>
     pendingModel ? option.key === pendingModel.key : isApplied(option);
 
-  const displayedDescriptors = pendingModel
-    ? resolveProviderOptionDescriptors({
-        capabilities: pendingModel.capabilities,
-        selections: pendingModel.selection.options,
-      })
-    : props.optionDescriptors;
+  const displayedDescriptors = props.modelLocked
+    ? []
+    : pendingModel
+      ? resolveProviderOptionDescriptors({
+          capabilities: pendingModel.capabilities,
+          selections: pendingModel.selection.options,
+        })
+      : props.optionDescriptors;
   const promptTraits = getPromptControlledTraits(displayedDescriptors, displayedPrompt);
   const displayedModel =
     pendingModel ??
@@ -519,6 +525,7 @@ function ThreadSettingsSessionProvider(
     group.models.some((model) => model.isLegacy),
   );
   const commitPendingModel = () => {
+    if (props.modelLocked) return true;
     if (pendingModel) {
       if (!canCommitPendingModel(pendingModel, props.providerGroups)) {
         Dialog.alert(
@@ -537,6 +544,7 @@ function ThreadSettingsSessionProvider(
   };
 
   const applyOptionChange = (id: string, value: string | boolean) => {
+    if (props.modelLocked) return;
     const descriptor = displayedDescriptors.find((entry) => entry.id === id);
     const change =
       descriptor?.type === "select" && typeof value === "string"
@@ -585,6 +593,7 @@ function ThreadSettingsSessionProvider(
   };
 
   const pressModel = (option: ModelOption) => {
+    if (props.modelLocked) return;
     void Haptics.selectionAsync();
     if (isApplied(option) || option.key !== pendingModel?.key) {
       setPendingPrompt(null);
@@ -609,6 +618,7 @@ function ThreadSettingsSessionProvider(
     props.cwd && scannedInstanceId ? { instanceId: scannedInstanceId, cwd: props.cwd } : null;
 
   const value = {
+    modelLocked: props.modelLocked === true,
     environmentId,
     providerInstanceId: props.providerInstanceId,
     providerGroups,
@@ -926,15 +936,21 @@ function ThreadSettingsOptionsItem(props: {
         </Animated.View>
       </Animated.View>
 
-      <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">Catalog</Text>
-      <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
-        <SwitchRow
-          label="Manage hidden models"
-          value={session.manageHidden}
-          onValueChange={session.setManageHidden}
-          isLast
-        />
-      </View>
+      {session.modelLocked ? null : (
+        <>
+          <Text className="px-5 pb-2 pt-7 text-sm font-t3-medium text-foreground-muted">
+            Catalog
+          </Text>
+          <View className="mx-4 overflow-hidden rounded-2xl bg-grouped-card">
+            <SwitchRow
+              label="Manage hidden models"
+              value={session.manageHidden}
+              onValueChange={session.setManageHidden}
+              isLast
+            />
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -990,11 +1006,15 @@ function ThreadSettingsMainContent(props: {
   const reducedMotion = useReducedMotion();
   const reduceMotionEnabled = useReduceMotionEnabled();
   const animationsReady = listLoaded && !reducedMotion && !reduceMotionEnabled;
-  const catalogItems = buildThreadSettingsCatalogItems(session);
+  const catalogItems = session.modelLocked ? [] : buildThreadSettingsCatalogItems(session);
   const hasActiveCatalogFilter =
     session.providerFilter !== null || session.searchQuery.trim().length > 0;
   const listItems = [
-    ...(catalogItems.length === 0 ? ([{ kind: "empty", key: "empty" }] as const) : catalogItems),
+    ...(session.modelLocked
+      ? []
+      : catalogItems.length === 0
+        ? ([{ kind: "empty", key: "empty" }] as const)
+        : catalogItems),
     { kind: "options", key: "options" },
   ] satisfies ReadonlyArray<ThreadSettingsCatalogItem>;
   const renderCatalogItem = (itemProps: LegendListRenderItemProps<ThreadSettingsCatalogItem>) => {
@@ -1235,37 +1255,41 @@ function ThreadSettingsModelsScreen() {
         title="Thread settings"
         onClose={presentation.onClose}
         closeAccessibilityLabel="Cancel thread settings"
-        search={search}
-        menus={[
-          {
-            title: "Model filters",
-            icon: hasCustomCatalogFilter
-              ? "line.3.horizontal.decrease.circle.fill"
-              : "line.3.horizontal.decrease",
-            items: [
-              {
-                id: "provider",
-                title: "Provider",
-                items: providerFilters.map((filter) => ({
-                  id: filter.id,
-                  title: filter.title,
-                  selected: session.providerFilter === filter.value,
-                  onPress: () => session.setProviderFilter(filter.value),
-                })),
-              },
-              ...(session.hasLegacyModels
-                ? [
+        search={session.modelLocked ? undefined : search}
+        menus={
+          session.modelLocked
+            ? []
+            : [
+                {
+                  title: "Model filters",
+                  icon: hasCustomCatalogFilter
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease",
+                  items: [
                     {
-                      id: "show-legacy",
-                      title: "Show legacy models",
-                      selected: session.showLegacy,
-                      onPress: () => session.setShowLegacy(!session.showLegacy),
+                      id: "provider",
+                      title: "Provider",
+                      items: providerFilters.map((filter) => ({
+                        id: filter.id,
+                        title: filter.title,
+                        selected: session.providerFilter === filter.value,
+                        onPress: () => session.setProviderFilter(filter.value),
+                      })),
                     },
-                  ]
-                : []),
-            ],
-          },
-        ]}
+                    ...(session.hasLegacyModels
+                      ? [
+                          {
+                            id: "show-legacy",
+                            title: "Show legacy models",
+                            selected: session.showLegacy,
+                            onPress: () => session.setShowLegacy(!session.showLegacy),
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+              ]
+        }
         optionsVersion={[
           session.providerFilter,
           session.providerGroups.map((group) => group.providerKey),
@@ -1367,6 +1391,11 @@ export function ExistingThreadSettingsRouteScreen({
   // A queued edit can end while the sheet is open; the prompt then belongs to the thread's draft.
   const draftKey = activeComposerDraftKey(threadKey, route.params.draftKey, queuedRunEdit);
   const prompt = useComposerDraft(draftKey).text;
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const modelLocked = isThreadModelLocked(
+    AsyncResult.isSuccess(preferences) && preferences.value.lockThreadModelAfterStart === true,
+    selectedThread,
+  );
 
   if (!selectedThread) {
     return <View className="flex-1 bg-sheet" />;
@@ -1376,7 +1405,8 @@ export function ExistingThreadSettingsRouteScreen({
     selectedEnvironmentRuntime?.serverConfig ?? null,
     selectedThreadCwd,
   );
-  const modelSelection = draftSettings.modelSelection ?? selectedThread.modelSelection;
+  const modelSelection =
+    (modelLocked ? null : draftSettings.modelSelection) ?? selectedThread.modelSelection;
   const lockedProviderInstanceId = threadAllowsProviderSwitch({
     thread: selectedThread,
     projection: structure?.projection,
@@ -1400,6 +1430,7 @@ export function ExistingThreadSettingsRouteScreen({
 
   return (
     <ThreadSettingsPickerScreen
+      modelLocked={modelLocked}
       environmentId={selectedThread.environmentId}
       projectId={selectedThread.projectId}
       cwd={selectedThreadCwd}
@@ -1419,10 +1450,14 @@ export function ExistingThreadSettingsRouteScreen({
         )
       }
       restoreSelection={withRememberedModelOptions}
-      optionDescriptors={resolveProviderOptionDescriptors({
-        capabilities: currentModelOption?.capabilities,
-        selections: modelSelection.options,
-      })}
+      optionDescriptors={
+        modelLocked
+          ? []
+          : resolveProviderOptionDescriptors({
+              capabilities: currentModelOption?.capabilities,
+              selections: modelSelection.options,
+            })
+      }
       onUpdateOptionSelections={(options) => {
         rememberModelOptions(modelSelection.instanceId, modelSelection.model, options ?? []);
         updateModelSelection({ ...modelSelection, options });

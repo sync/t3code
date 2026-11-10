@@ -37,6 +37,7 @@ export function useComposerProviderModel(
     readonly projectModelSelection: ModelSelection | null | undefined;
     readonly promptInjectionState: ReturnType<typeof getComposerPromptInjectionState>;
     readonly threadStarted: boolean;
+    readonly modelLocked?: boolean;
   },
 ) {
   const {
@@ -61,7 +62,7 @@ export function useComposerProviderModel(
   const selection = resolveComposerProviderSelection({
     entries: providerInstanceEntries,
     candidateInstanceIds: [
-      draftModelSelectionApplies(draftModelState, threadStarted)
+      !input.modelLocked && draftModelSelectionApplies(draftModelState, threadStarted)
         ? draftModelState.activeProvider
         : null,
       ...candidateInstanceIds,
@@ -74,7 +75,7 @@ export function useComposerProviderModel(
   const selectedProvider: ProviderDriverKind =
     selection.selectedProviderEntry?.driverKind ?? selection.requestedDriverKind;
   const modelState = deriveEffectiveComposerModelState({
-    draft: draftModelState,
+    draft: input.modelLocked ? null : draftModelState,
     threadStarted,
     providers: providerStatuses,
     selectedProvider,

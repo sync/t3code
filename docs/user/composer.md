@@ -12,6 +12,14 @@ becomes an attachment when inserting it would exceed the message limit. On a
 hardware keyboard, use `Cmd+Shift+V` on Apple devices or `Ctrl+Shift+V` elsewhere
 to keep a large paste editable in the composer instead.
 
+## Model selection
+
+To keep a thread's model and reasoning settings fixed, turn on **Settings → Labs →
+Lock model after thread starts**. Choose the model before sending the first
+message. Started threads show their model in thread details on web and desktop,
+or below the thread header on mobile. Turn the setting off to change the model
+again. This preference applies to the client where you set it.
+
 ## Formatting
 
 The composer writes Markdown and shows it styled as you type. When your cursor

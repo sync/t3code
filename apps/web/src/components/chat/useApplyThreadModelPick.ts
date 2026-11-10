@@ -5,6 +5,8 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { useContext } from "react";
+import { isThreadModelLocked } from "@t3tools/client-runtime/state/thread-execution";
+import { getClientSettings } from "../../hooks/useSettings";
 
 import { type ComposerThreadTarget, useComposerDraftStore } from "../../composerDraftStore";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
@@ -24,6 +26,7 @@ export function useApplyThreadModelPick() {
     if (!draft?.modelSelectionExplicit || !draft.activeProvider) return;
     const pick = draft.modelSelectionByProvider[draft.activeProvider];
     const thread = registry.get(environmentThreadShells.threadShellAtom(target));
+    if (isThreadModelLocked(getClientSettings().lockThreadModelAfterStart, thread)) return;
     if (!pick || !thread || store.draftThreadsByThreadKey[scopedThreadKey(target)]) return;
     // Another instance replaces the live session, which may hold an open question; that pick
     // still waits for a sent message.

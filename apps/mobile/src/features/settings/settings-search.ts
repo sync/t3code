@@ -109,6 +109,8 @@ const SETTINGS_SEARCH_TERMS = {
     "start from remote",
   ],
   SettingsLabs: [
+    "lock model after thread starts",
+    "reasoning effort provider readonly composer",
     "beta",
     "linked environments",
     "link machine",
