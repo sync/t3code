@@ -15,6 +15,7 @@ import {
 } from "@t3tools/contracts";
 import type { deriveThreadStructureRuntime } from "@t3tools/client-runtime/state/thread-execution";
 import { type SetStateAction } from "react";
+import { isThreadModelLocked } from "@t3tools/client-runtime/state/thread-execution";
 import { useNavigate } from "@tanstack/react-router";
 import { toastManager } from "../ui/toast";
 import { resolveAppModelSelectionForInstance } from "../../modelSelection";
@@ -137,6 +138,7 @@ export function useComposerSelection(input: ComposerSelectionInput) {
     options?: { focusComposer?: boolean },
   ) => {
     if (!activeThread) return;
+    if (isThreadModelLocked(settings.lockThreadModelAfterStart, activeThread)) return;
     cancelHeldComposerSend(composerTargetKey(composerDraftTarget));
     const entry = providerStatuses.find((snapshot) => snapshot.instanceId === instanceId);
     const resolvedDriverKind = entry?.driver ?? null;

@@ -16,6 +16,7 @@ import {
 import {
   canResumeThread,
   deriveProviderSubagentStatus,
+  isThreadModelLocked,
   deriveProviderExtensionStatuses,
   deriveResumableRunId,
   deriveLatestThreadRun,
@@ -345,7 +346,13 @@ export function useThreadComposerState(input: {
   const threadDraftSettings = useComposerDraftSettings(selectedThreadKey);
   const selectedThreadQueueCount = selectedThreadQueuedMessages.length;
   const selectedThread = selectedThreadShell;
-  const modelSelection = selectedDraft.modelSelection ?? selectedThread?.modelSelection ?? null;
+  const modelLocked = isThreadModelLocked(
+    AsyncResult.isSuccess(preferencesResult) &&
+      preferencesResult.value.lockThreadModelAfterStart === true,
+    selectedThread,
+  );
+  const modelSelection =
+    (modelLocked ? null : selectedDraft.modelSelection) ?? selectedThread?.modelSelection ?? null;
   const serverConfig = selectedEnvironmentRuntime?.serverConfig;
   const pendingHandoff = resolvePendingHandoff(
     selectedThreadProjection?.projection,
@@ -662,7 +669,13 @@ export function useThreadComposerState(input: {
     if (text.length === 0 && attachments.length === 0) {
       return null;
     }
-    const modelSelection = draft.modelSelection ?? thread.modelSelection;
+    const livePreferences = appAtomRegistry.get(mobilePreferencesAtom);
+    const locked = isThreadModelLocked(
+      AsyncResult.isSuccess(livePreferences) &&
+        livePreferences.value.lockThreadModelAfterStart === true,
+      thread,
+    );
+    const modelSelection = (locked ? null : draft.modelSelection) ?? thread.modelSelection;
     const serverConfig = selectedEnvironmentRuntime?.serverConfig;
     const modelUnavailable =
       selectedEnvironmentRuntime?.connectionState === "connected" &&
@@ -1076,6 +1089,7 @@ export function useThreadComposerState(input: {
     cancelQueuedRunEdit,
     onRemoveQueuedEditAttachment,
     modelSelection,
+    modelLocked,
     pendingHandoff,
     canSwitchThreadProvider,
     runtimeMode,

@@ -5,6 +5,7 @@ import type {
   ProjectScript,
   ResolvedKeybindingsConfig,
   ThreadId,
+  ServerProvider,
 } from "@t3tools/contracts";
 
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -41,13 +42,17 @@ import { filesystemEnvironment } from "../../state/filesystem";
 import { useEnvironmentQuery } from "../../state/query";
 import { ThreadDetailsThreadPrRows } from "./ThreadDetailsPrRows";
 import { cn } from "../../lib/utils";
-import { SlidersHorizontalIcon } from "lucide-react";
+import { BotIcon, SlidersHorizontalIcon } from "lucide-react";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LABEL_CLASS,
+  THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
 } from "./threadDetailsPanelStyles";
 import { Menu, MenuPopup } from "../ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
+import { FastBolt } from "./EffortGlyph";
 
 interface ThreadDetailsPanelProps extends Pick<
   ComponentProps<typeof ThreadDetailsCard>,
@@ -95,6 +100,70 @@ interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   usage: ThreadDetailsUsageInput;
+  model: {
+    provider: ServerProvider | undefined;
+    label: string;
+    effort: string | null;
+    speed: "Fast" | "Ultrafast" | null;
+  } | null;
+}
+
+function LockedModelRow({ model }: { model: NonNullable<ThreadDetailsPanelProps["model"]> }) {
+  const gt = useGT();
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <ThreadDetailsSection
+      title={gt("Model")}
+      headingId="thread-details-model-heading"
+      showHeading={false}
+    >
+      <div className={cn(THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS, "flex items-center gap-0 ps-0")}>
+        <ThreadDetailsControl
+          part="icon"
+          aria-label={gt("Model")}
+          aria-expanded={expanded}
+          className="mx-1.5"
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {model.provider ? (
+            <ProviderInstanceIcon
+              driverKind={model.provider.driver}
+              displayName={model.provider.displayName ?? model.provider.instanceId}
+              className="size-4 shrink-0"
+              iconClassName="size-4"
+            />
+          ) : (
+            <BotIcon className={THREAD_DETAILS_PANEL_ICON_CLASS} aria-hidden />
+          )}
+        </ThreadDetailsControl>
+        {expanded ? (
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="min-w-0 truncate">{model.label}</span>
+            {model.effort ? (
+              <span className="shrink-0 text-muted-foreground">{model.effort}</span>
+            ) : null}
+            {model.speed ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      role="img"
+                      aria-label={model.speed}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                  }
+                >
+                  <FastBolt ultra={model.speed === "Ultrafast"} />
+                </TooltipTrigger>
+                <TooltipPopup>{model.speed}</TooltipPopup>
+              </Tooltip>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </ThreadDetailsSection>
+  );
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -328,6 +397,13 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
               ) : null}
 
               {visible.usage ? <ThreadDetailsUsage {...props.usage} /> : null}
+
+              {props.model ? (
+                <LockedModelRow
+                  key={`${props.environmentId}/${props.threadId}`}
+                  model={props.model}
+                />
+              ) : null}
 
               {visible.context && props.usage.contextWindow ? (
                 <ThreadDetailsContext usage={props.usage.contextWindow} />

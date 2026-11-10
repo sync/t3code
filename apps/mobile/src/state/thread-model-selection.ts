@@ -1,5 +1,8 @@
 import { runAtomCommand, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { errorDisplayMessage } from "@t3tools/client-runtime/errors";
+import { isThreadModelLocked } from "@t3tools/client-runtime/state/thread-execution";
+import { AsyncResult } from "effect/reactivity";
+import { mobilePreferencesAtom } from "./preferences";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
@@ -29,6 +32,15 @@ export function selectThreadModel(
   },
   value: ModelSelection,
 ): void {
+  const thread = appAtomRegistry.get(environmentThreadShells.threadShellAtom(ref));
+  const preferences = appAtomRegistry.get(mobilePreferencesAtom);
+  if (
+    isThreadModelLocked(
+      AsyncResult.isSuccess(preferences) && preferences.value.lockThreadModelAfterStart === true,
+      thread,
+    )
+  )
+    return;
   const threadKey = scopedThreadKey(ref.environmentId, ref.threadId);
   // Its own object, so an older reply for an equal pick cannot release this one.
   const modelSelection = { ...value };
@@ -40,7 +52,6 @@ export function selectThreadModel(
   if (draftKey !== threadKey && isQueuedRunEditSaving(threadKey)) return;
   updateComposerDraftSettings(draftKey, { modelSelection });
   if (draftKey !== threadKey) return;
-  const thread = appAtomRegistry.get(environmentThreadShells.threadShellAtom(ref));
   // Another instance replaces the live session, which may hold an open question; that pick
   // still waits for a sent message.
   if (

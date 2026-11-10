@@ -154,6 +154,8 @@ const SETTINGS_SEARCH_TERMS = {
     msg("start from remote", { $context: "settings search keyword" }),
   ],
   SettingsLabs: [
+    "lock model after thread starts",
+    "reasoning effort provider readonly composer",
     msg("beta", { $context: "settings search keyword" }),
     msg("linked environments", { $context: "settings search keyword" }),
     msg("link machine", { $context: "settings search keyword" }),

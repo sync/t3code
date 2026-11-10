@@ -82,6 +82,8 @@ import {
 } from "../../components/ComposerToolbar";
 import { formatTokens } from "@t3tools/shared/usageFormat";
 import { ComposerModelControl } from "../../components/ComposerModelControl";
+import { isThreadModelLocked } from "@t3tools/client-runtime/state/thread-execution";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import {
   composerStripAttachments,
   type DraftComposerFileAttachment,
@@ -339,6 +341,13 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
       states: uploadStates,
     });
   const currentModelSelection = props.selectedThread.modelSelection;
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const modelLocked =
+    !props.isDraft &&
+    isThreadModelLocked(
+      AsyncResult.isSuccess(preferences) && preferences.value.lockThreadModelAfterStart === true,
+      props.selectedThread,
+    );
   const modelUnavailable =
     props.connectionState === "connected" &&
     isModelSelectionUnavailable(
@@ -685,7 +694,14 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     </>
   ) : null;
 
-  const modelControl = (
+  const modelControl = modelLocked ? (
+    <ComposerActionButton
+      accessibilityLabel="Thread permissions"
+      size={usesLargeControls ? "large" : "regular"}
+      icon="gearshape"
+      onPress={openSettings}
+    />
+  ) : (
     // Only the expanded label can truncate; shrinking the icon-only control clips the icon.
     <View className={compactEditor.isExpanded ? "min-w-0 shrink" : "shrink-0"}>
       <ComposerModelControl

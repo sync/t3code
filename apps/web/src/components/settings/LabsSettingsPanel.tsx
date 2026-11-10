@@ -28,6 +28,7 @@ export function LabsSettingsPanel() {
     <SettingsPageContainer>
       <SettingsSection id="beta" title={gt("Beta")}>
         <BoringSidebarRow />
+        <LockThreadModelRow />
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
@@ -38,6 +39,27 @@ export function LabsSettingsPanel() {
         <AgentFeedbackRow />
       </SettingsSection>
     </SettingsPageContainer>
+  );
+}
+
+function LockThreadModelRow() {
+  const searchableSetting = useSearchableSetting();
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      {...searchableSetting("lock-thread-model")}
+      description="Keep the model and reasoning settings fixed after the first message. Show them in thread details instead of the composer. Turn this off to change them again."
+      control={
+        <Switch
+          checked={settings.lockThreadModelAfterStart}
+          onCheckedChange={(checked) =>
+            updateSettings({ lockThreadModelAfterStart: Boolean(checked) })
+          }
+          aria-label="Lock model after thread starts"
+        />
+      }
+    />
   );
 }
 

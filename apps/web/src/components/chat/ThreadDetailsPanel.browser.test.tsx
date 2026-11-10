@@ -165,6 +165,7 @@ function Panel({
         environmentId={threadRef.environmentId}
         threadId={threadRef.threadId}
         projectId={ProjectId.make("project")}
+        model={null}
         composerDraftTarget={threadRef}
         worktreePath={draftEnvMode === undefined ? state.folder : null}
         isServerThread={draftEnvMode === undefined}

@@ -1041,8 +1041,20 @@ function ThreadRouteContent(
           header={
             props.inspectorPresentation ? null : (
               <ThreadHeader
+                key={scopedThreadKey(selectedThread.environmentId, selectedThread.id)}
                 title={selectedThread.title}
                 subtitle={threadStatusLabel ?? headerSubtitle}
+                lockedModel={
+                  composer.modelLocked
+                    ? {
+                        selection: selectedThread.modelSelection,
+                        provider: serverConfig?.providers.find(
+                          (provider) =>
+                            provider.instanceId === selectedThread.modelSelection.instanceId,
+                        ),
+                      }
+                    : null
+                }
                 gitControls={threadGitControlProps}
                 hasThreadCwd={selectedThreadCwd !== null}
                 inspectorMode={inspectorMode}

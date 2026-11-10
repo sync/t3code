@@ -5,6 +5,7 @@ import { ChildThreadApprovals } from "./chat/ChildThreadApprovals";
 import { draftSupportedRuntimeModes } from "./chat/runtimeModeConfig";
 import { workspaceAreaProps } from "../lib/workspaceFocus";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import { getSelectedModelSpeed } from "@t3tools/client-runtime/model-traits";
 import { resolveNewThreadModelSelection } from "@t3tools/shared/usageLimits";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import { ScrollToEndButton, WorkspaceFileDropOverlay } from "./chat/TimelineOverlays";
@@ -91,6 +92,7 @@ import {
 import {
   canResumeThread,
   deriveProviderSubagentStatus,
+  isThreadModelLocked,
   deriveProviderExtensionStatuses,
   deriveReportedModelSelection,
   deriveResumableRunId,
@@ -1359,11 +1361,17 @@ export default function ChatView(props: ChatViewProps) {
       : providersByEnvironment.get(providerEnvironmentId)) ?? EMPTY_PROVIDERS,
     gitCwd,
   );
+  const modelLocked =
+    isServerThread && isThreadModelLocked(settings.lockThreadModelAfterStart, activeThread);
   const composerModelSelectionApplies = draftModelSelectionApplies(
     { modelSelectionExplicit: composerModelSelectionExplicit },
     threadHasStarted(activeThread),
   );
-  const selectedProviderByThreadId = composerModelSelectionApplies ? composerActiveProvider : null;
+  const selectedProviderByThreadId = modelLocked
+    ? (activeThread?.modelSelection.instanceId ?? null)
+    : composerModelSelectionApplies
+      ? composerActiveProvider
+      : null;
   const threadProvider =
     activeThread?.modelSelection.instanceId ??
     activeProjectDefaultModelSelection?.instanceId ??
@@ -2640,7 +2648,7 @@ export default function ChatView(props: ChatViewProps) {
     latestUserMessageAt: serverThread?.latestUserMessageAt ?? null,
   });
   const pendingHandoffSelection =
-    (composerModelSelectionApplies ? composerSelectedModelSelection : null) ??
+    (!modelLocked && composerModelSelectionApplies ? composerSelectedModelSelection : null) ??
     activeThread?.modelSelection;
   const pendingHandoffSelectionUsable = providerInstanceEntries.some(
     (entry) =>
@@ -4191,6 +4199,22 @@ export default function ChatView(props: ChatViewProps) {
                     sources: serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES,
                     contextWindow: activeContextWindow,
                   }}
+                  model={
+                    modelLocked
+                      ? {
+                          provider: providerStatuses.find(
+                            (provider) =>
+                              provider.instanceId === activeThread.modelSelection.instanceId,
+                          ),
+                          label: providerSubagentModelLabel,
+                          effort: providerSubagentEffortLabel,
+                          speed: getSelectedModelSpeed(
+                            activeThread.modelSelection,
+                            providerSubagentCatalogModel?.capabilities?.optionDescriptors,
+                          ),
+                        }
+                      : null
+                  }
                 />
 
                 <PullRequestThreadDialogHost

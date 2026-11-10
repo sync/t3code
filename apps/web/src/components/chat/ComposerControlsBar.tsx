@@ -41,6 +41,7 @@ import { resolveComposerControlsOwnership } from "./composerControlsOwnership";
 const MODEL_TRIGGER_STATES = "data-popup-open:bg-accent data-popup-open:text-foreground";
 
 export function ComposerControlsBar(props: {
+  modelLocked: boolean;
   environmentId: EnvironmentId;
   workspaceCwd: string | null;
   routeKind: ChatComposerProps["routeKind"];
@@ -144,6 +145,7 @@ export function ComposerControlsBar(props: {
     matchesDefault: accessMatchesDefault || props.permissionsShownInStrip,
     collapsed: composerControlsCollapsed,
     measuredHiddenBlockCount,
+    modelPickerHidden: props.modelLocked,
   });
   const controlSize = composerControlsCollapsed ? "xs" : "sm";
   const gt = useGT();
@@ -265,7 +267,7 @@ export function ComposerControlsBar(props: {
     </ComposerControl>
   ) : (
     <>
-      {composerModelPicker}
+      {props.modelLocked ? null : composerModelPicker}
 
       <>
         {restingBlockDefs.map((def, index) => {

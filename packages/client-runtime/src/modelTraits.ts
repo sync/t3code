@@ -28,6 +28,28 @@ export function isReasoningSelect(
   return descriptor.type === "select" && isReasoningControl(descriptor);
 }
 
+export function getSelectedModelSpeed(
+  selection: ModelSelection,
+  descriptors: ReadonlyArray<ProviderOptionDescriptor> = [],
+): "Fast" | "Ultrafast" | null {
+  const tier = selection.options?.find((option) => option.id === "serviceTier")?.value;
+  const serviceTier = descriptors.find((descriptor) => descriptor.id === "serviceTier");
+  const label =
+    serviceTier?.type === "select"
+      ? serviceTier.options.find((option) => option.id === tier)?.label
+      : undefined;
+  if (label === "Ultrafast" || tier === "ultrafast") return "Ultrafast";
+  if (
+    label === "Fast" ||
+    tier === "fast" ||
+    tier === "priority" ||
+    selection.options?.some((option) => option.id === "fastMode" && option.value === true)
+  ) {
+    return "Fast";
+  }
+  return null;
+}
+
 export function replaceDescriptorCurrentValue(
   descriptors: ReadonlyArray<ProviderOptionDescriptor>,
   descriptorId: string,
