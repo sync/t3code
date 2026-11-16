@@ -493,6 +493,23 @@ function buildGhosttyLaunch(target: string): EditorLaunch {
   };
 }
 
+export const TowerApplicationPath = Context.Reference<string>(
+  "t3/process/externalLauncher/TowerApplicationPath",
+  { defaultValue: () => "/Applications/Tower.app" },
+);
+
+const isTowerAvailable = Effect.fn("externalLauncher.isTowerAvailable")(function* (
+  platform: NodeJS.Platform,
+) {
+  if (platform !== "darwin") return false;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const applicationPath = yield* TowerApplicationPath;
+  return yield* fileSystem
+    .exists(path.join(applicationPath, "Contents", "MacOS", "Tower"))
+    .pipe(Effect.orElseSucceed(() => false));
+});
+
 function buildBrowserLaunch(
   target: string,
   platform: NodeJS.Platform,
@@ -536,6 +553,10 @@ const buildAvailableEditors = Effect.fn("externalLauncher.buildAvailableEditors"
   const available: EditorId[] = [];
 
   for (const editor of EDITORS) {
+    if (editor.id === "tower") {
+      if (yield* isTowerAvailable(platform)) available.push(editor.id);
+      continue;
+    }
     if (editor.id === "ghostty") {
       if (yield* isGhosttyAvailable(platform)) {
         available.push(editor.id);
@@ -620,18 +641,29 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
     return yield* new ExternalLauncherUnknownEditorError({ editor: input.editor });
   }
 
-  if (editorDef.id === "ghostty") {
+  if (editorDef.id === "ghostty" || editorDef.id === "tower") {
     if (platform !== "darwin") {
       return yield* new ExternalLauncherUnsupportedEditorError({ editor: input.editor });
     }
-    if (!(yield* isGhosttyAvailable(platform))) {
+    const available = yield* editorDef.id === "ghostty"
+      ? isGhosttyAvailable(platform)
+      : isTowerAvailable(platform);
+    if (!available) {
       return yield* new ExternalLauncherCommandNotFoundError({
         editor: input.editor,
-        command: GHOSTTY_APP_BUNDLE,
+        command: editorDef.id === "ghostty" ? GHOSTTY_APP_BUNDLE : yield* TowerApplicationPath,
       });
     }
 
-    const launch = buildGhosttyLaunch(input.cwd);
+    const launch: EditorLaunch =
+      editorDef.id === "ghostty"
+        ? buildGhosttyLaunch(input.cwd)
+        : {
+            editor: "tower",
+            target: input.cwd,
+            command: "/usr/bin/open",
+            args: ["-a", yield* TowerApplicationPath, input.cwd],
+          };
     const fileSystem = yield* FileSystem.FileSystem;
     const targetInfo = yield* fileSystem.stat(input.cwd).pipe(
       Effect.mapError(
@@ -651,7 +683,7 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
         target: launch.target,
         command: launch.command,
         args: launch.args,
-        cause: new Error("Ghostty project targets must be directories."),
+        cause: new Error(`${editorDef.label} project targets must be directories.`),
       });
     }
     return launch;

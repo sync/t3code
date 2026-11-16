@@ -1,5 +1,5 @@
 import type { EditorId } from "@t3tools/contracts";
-import { FolderClosedIcon } from "lucide-react";
+import { FolderClosedIcon, GitForkIcon } from "lucide-react";
 
 import { isMacPlatform, isWindowsPlatform } from "~/lib/utils";
 import {
@@ -81,6 +81,7 @@ export function editorIconOptions(platform: string): ReadonlyArray<EditorIconOpt
       kind: "brand",
     },
     { Icon: GhosttyIcon, value: "ghostty", kind: "brand" },
+    { Icon: GitForkIcon, value: "tower", kind: "generic" },
     {
       Icon: IntelliJIdeaIcon,
       value: "idea",

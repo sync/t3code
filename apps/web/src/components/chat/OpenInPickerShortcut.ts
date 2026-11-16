@@ -8,7 +8,7 @@ import {
 import { msg } from "gt-react";
 import { useEffect } from "react";
 
-import { usePreferredProjectOpener } from "../../editorPreferences";
+import { isHostProjectOpener, usePreferredProjectOpener } from "../../editorPreferences";
 import { editorLabelForPlatform } from "../../editorLabels";
 import { isOpenFavoriteEditorShortcut } from "../../keybindings";
 import { m } from "../../i18n/messages";
@@ -61,20 +61,19 @@ export function useOpenFavoriteEditorShortcut({
   const remote = useRemoteOpenState(environmentId);
   const remoteCapableEditors = useRemoteCapableEditors();
   const canOperateHost = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
-  const canOpenGhostty = canOperateHost && availableEditors.includes("ghostty");
+  const hostProjectOpeners = canOperateHost ? availableEditors.filter(isHostProjectOpener) : [];
   const effectiveEditors =
     remote.mode === "local-exec"
       ? availableEditors
-      : remote.mode === "remote-unavailable" && canOpenGhostty
-        ? ["ghostty" as const]
-        : canOpenGhostty
-          ? [...remoteCapableEditors, "ghostty" as const]
-          : remoteCapableEditors;
+      : remote.mode === "remote-unavailable"
+        ? hostProjectOpeners
+        : [...remoteCapableEditors, ...hostProjectOpeners];
   const [preferredEditor] = usePreferredProjectOpener(effectiveEditors);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes a window keydown listener for the open-in-editor shortcut while enabled
   useEffect(() => {
-    if (!enabled || (remote.mode === "remote-unavailable" && preferredEditor !== "ghostty")) return;
+    if (!enabled || (remote.mode === "remote-unavailable" && !isHostProjectOpener(preferredEditor)))
+      return;
     const handler = (event: globalThis.KeyboardEvent) => {
       if (
         event.repeat ||
@@ -86,7 +85,7 @@ export function useOpenFavoriteEditorShortcut({
 
       event.preventDefault();
       const label = editorLabelForPlatform(preferredEditor, navigator.platform);
-      if (preferredEditor !== "ghostty" && remote.mode === "remote-links") {
+      if (!isHostProjectOpener(preferredEditor) && remote.mode === "remote-links") {
         const url = buildRemoteOpenUrl({
           editor: preferredEditor,
           ...remote.host,

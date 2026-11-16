@@ -117,7 +117,7 @@ it.each([
   },
 );
 
-const available = ["idea", "ghostty", "file-manager"] as const;
+const available = ["idea", "ghostty", "tower", "file-manager"] as const;
 
 describe("editor preferences", () => {
   it("keeps IntelliJ for files and excludes Ghostty", () => {
@@ -126,9 +126,15 @@ describe("editor preferences", () => {
   });
 
   it("keeps IntelliJ available for projects alongside Ghostty", () => {
-    expect(availableProjectOpeners(available)).toEqual(["ghostty", "idea", "file-manager"]);
+    expect(availableProjectOpeners(available)).toEqual([
+      "ghostty",
+      "tower",
+      "idea",
+      "file-manager",
+    ]);
     expect(resolvePreferredProjectOpener(available, null, "idea")).toBe("idea");
     expect(resolvePreferredProjectOpener(available, "ghostty", "idea")).toBe("ghostty");
+    expect(resolvePreferredProjectOpener(available, "tower", "idea")).toBe("tower");
   });
 
   it("resolves project and file preferences independently", () => {

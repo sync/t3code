@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => ({
-    availableEditors: ["cursor", "ghostty", "file-manager"],
+    availableEditors: ["cursor", "ghostty", "tower", "file-manager"],
     shellRevealInFileManager: true,
     shellRevealInFileManagerKind: "xdg-open",
     environment: { platform: { os: "linux" } },
@@ -132,6 +132,8 @@ describe("useFileContextMenu", () => {
       input: { cwd: "/workspace/project/src/index.ts", editor: "file-manager" },
     });
   });
+});
+
 it("excludes project-only apps from file actions", async () => {
   state.remoteOpen = { state: { mode: "local-exec" }, isResolved: true };
   state.openInEditor.mockClear();
@@ -140,6 +142,6 @@ it("excludes project-only apps from file actions", async () => {
     { id: "editor:cursor", label: "Cursor" },
   ]);
   await menu.activate("editor:ghostty", BASE_TARGET);
+  await menu.activate("editor:tower", BASE_TARGET);
   expect(state.openInEditor).not.toHaveBeenCalled();
-});
 });

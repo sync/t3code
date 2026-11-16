@@ -109,6 +109,15 @@ export const EDITORS = [
     showInProjectPicker: true,
   },
   {
+    id: "tower",
+    label: "Tower",
+    commands: null,
+    launchStyle: "direct-path",
+    canOpenFiles: false,
+    canOpenDirectories: true,
+    showInProjectPicker: true,
+  },
+  {
     id: "idea",
     label: "IntelliJ IDEA",
     commands: ["idea"],
