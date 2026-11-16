@@ -68,6 +68,12 @@ export function createDeviceEnvironmentAtoms<R, E>(
       scheduler,
       concurrency: openConcurrency,
     }),
+    runProject: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:device:run-project",
+      tag: WS_METHODS.deviceRunProject,
+      scheduler,
+      concurrency: openConcurrency,
+    }),
     close: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:device:close",
       tag: WS_METHODS.deviceClose,

@@ -682,6 +682,10 @@
     "./assistantInsights": {
       "types": "./src/assistantInsights.ts",
       "import": "./src/assistantInsights.ts"
+    },
+    "./projectDeviceRun": {
+      "types": "./src/projectDeviceRun.ts",
+      "import": "./src/projectDeviceRun.ts"
     }
   },
   "scripts": {

@@ -351,6 +351,31 @@ export const DeviceOpenInput = Schema.Struct({
 });
 export type DeviceOpenInput = typeof DeviceOpenInput.Type;
 
+export const DeviceToolRunProjectInput = Schema.Struct({
+  platform: DevicePlatform,
+  deviceId: DeviceId.annotate({ description: "Local simulator or emulator ID from device_list." }),
+  port: Schema.optional(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })).annotate({
+      description: "Port passed to the project's build command. Defaults to 8081.",
+    }),
+  ),
+});
+export type DeviceToolRunProjectInput = typeof DeviceToolRunProjectInput.Type;
+
+export const DeviceRunProjectInput = Schema.Struct({
+  threadId: ThreadId,
+  ...DeviceToolRunProjectInput.fields,
+});
+export type DeviceRunProjectInput = typeof DeviceRunProjectInput.Type;
+
+export const DeviceRunProjectResult = Schema.Struct({
+  status: Schema.Literal("started"),
+  terminalId: Schema.String,
+  deviceId: DeviceId,
+  port: Schema.Int,
+});
+export type DeviceRunProjectResult = typeof DeviceRunProjectResult.Type;
+
 export const DeviceCloseInput = Schema.Struct({
   hostId: Schema.optional(DeviceHostId),
   threadId: ThreadId,

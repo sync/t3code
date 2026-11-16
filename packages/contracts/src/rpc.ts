@@ -361,6 +361,9 @@ import {
   DeviceSimlockIdentityInput,
   DeviceHostSummary,
   DeviceOpenInput,
+  DeviceRunProjectInput,
+  DeviceRunProjectResult,
+  DeviceToolUnavailableError,
   DeviceServiceState,
   DeviceSession,
   DeviceShutdownInput,
@@ -575,6 +578,7 @@ export const WS_METHODS = {
   deviceEasAccount: "device.easAccount",
   deviceSimlockIdentity: "device.simlockIdentity",
   deviceOpen: "device.open",
+  deviceRunProject: "device.runProject",
   deviceClose: "device.close",
   deviceShutdown: "device.shutdown",
   deviceDetail: "device.detail",
@@ -2069,6 +2073,12 @@ const WsDeviceOpenRpc = Rpc.make(WS_METHODS.deviceOpen, {
   error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
 });
 
+const WsDeviceRunProjectRpc = Rpc.make(WS_METHODS.deviceRunProject, {
+  payload: DeviceRunProjectInput,
+  success: DeviceRunProjectResult,
+  error: Schema.Union([DeviceToolUnavailableError, EnvironmentAuthorizationError]),
+});
+
 const WsDeviceCloseRpc = Rpc.make(WS_METHODS.deviceClose, {
   payload: DeviceCloseInput,
   error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
@@ -2684,6 +2694,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsDeviceEasAccountRpc,
   WsDeviceSimlockIdentityRpc,
   WsDeviceOpenRpc,
+  WsDeviceRunProjectRpc,
   WsDeviceCloseRpc,
   WsDeviceShutdownRpc,
   WsDeviceDetailRpc,

@@ -156,11 +156,21 @@ export const reads = <P, A, E, R>(handle: (params: P) => Effect.Effect<A, E, R>)
 export const readsAsCaller = <P, A, E, R>(handle: (params: P) => Effect.Effect<A, E, R>) =>
   declare((params: P) => requireThreadCaller.pipe(Effect.flatMap(() => handle(params))), undefined);
 
-export const actsAsCaller = <P, A, E, R>(handle: (params: P) => Effect.Effect<A, E, R>) =>
+export const actsAsCaller = <P, A, E, R>(
+  handle: (params: P) => Effect.Effect<A, E, R>,
+  options?: { readonly fullAccessMessage: string },
+) =>
   declare(
     (params: P) =>
       requireThreadCaller.pipe(
         Effect.andThen(writingCaller),
+        Effect.tap((caller) =>
+          options
+            ? assertFullAccess(caller, options.fullAccessMessage).pipe(
+                Effect.andThen(assertNotLinked(caller, "run a saved project command")),
+              )
+            : Effect.void,
+        ),
         Effect.flatMap(() => handle(params)),
       ),
     undefined,

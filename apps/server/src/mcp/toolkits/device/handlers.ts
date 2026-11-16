@@ -12,6 +12,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as DeviceService from "../../../device/DeviceService.ts";
+import * as ProjectDeviceRunner from "../../../project/ProjectDeviceRunner.ts";
 import { threadWorkspaceRoot } from "../../../project/threadWorkspaceRoot.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
@@ -316,6 +317,17 @@ const handlers = {
         ),
       };
     }).pipe(Effect.mapError(toolError)),
+  ),
+  device_run_project: McpToolAccess.actsAsCaller(
+    Effect.fn("device_run_project")(function* (input) {
+      const scope = yield* requireDeviceAccess;
+      const runner = yield* ProjectDeviceRunner.ProjectDeviceRunner;
+      return yield* runner.run({ ...input, threadId: scope.thread.threadId });
+    }),
+    {
+      fullAccessMessage:
+        "Running a saved project build command requires full access in default mode.",
+    },
   ),
   device_screenshot: McpToolAccess.readsAsCaller((input) =>
     Effect.gen(function* () {

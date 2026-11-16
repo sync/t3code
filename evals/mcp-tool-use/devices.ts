@@ -11,6 +11,7 @@ import {
   DeviceError,
   type DeviceHostId,
   DeviceOperationError,
+  DeviceToolUnavailableError,
   type DevicePlatform,
   type DeviceSummary,
   EnvironmentId,
@@ -45,6 +46,7 @@ import * as McpInvocationContext from "../../apps/server/src/mcp/McpInvocationCo
 import { liveThreadsLayer } from "../../apps/server/src/mcp/McpToolAccess.testkit.ts";
 import { DeviceToolkit } from "../../apps/server/src/mcp/toolkits/device/tools.ts";
 import * as ProjectService from "../../apps/server/src/project/ProjectService.ts";
+import * as ProjectDeviceRunner from "../../apps/server/src/project/ProjectDeviceRunner.ts";
 import { ServerSettingsService } from "../../apps/server/src/serverSettings.ts";
 import { shellInvocations } from "./device-grading.ts";
 
@@ -772,6 +774,16 @@ export const makeDeviceTools = Effect.fn("evaluateMcpToolUse.makeDeviceTools")(f
   );
   const context = yield* Layer.build(
     McpHttpServer.layerDeviceToolkit.pipe(
+      Layer.provide(
+        Layer.mock(ProjectDeviceRunner.ProjectDeviceRunner)({
+          run: () =>
+            Effect.fail(
+              new DeviceToolUnavailableError({
+                reason: "No saved project build command is configured in this evaluation.",
+              }),
+            ),
+        }),
+      ),
       Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
       Layer.provideMerge(devices),
       Layer.provideMerge(

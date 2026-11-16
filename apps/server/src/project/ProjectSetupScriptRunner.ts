@@ -1,4 +1,11 @@
-import { linkOriginIsFenced, ProjectId, type ProjectScript, ThreadId } from "@t3tools/contracts";
+import {
+  linkOriginIsFenced,
+  ProjectId,
+  type ProjectScript,
+  type TerminalError,
+  type TerminalOpenInput,
+  ThreadId,
+} from "@t3tools/contracts";
 import { splitsSurrogatePair } from "@t3tools/shared/assistantCitations";
 import {
   projectScriptRuntimeEnv,
@@ -124,12 +131,24 @@ export const ProjectSetupScriptRunnerError = Schema.Union([
 ]);
 export type ProjectSetupScriptRunnerError = typeof ProjectSetupScriptRunnerError.Type;
 
+type ScriptTerminalInput = Pick<TerminalOpenInput, "threadId" | "cwd" | "worktreePath" | "env"> & {
+  readonly terminalId: string;
+  readonly script: ProjectScript;
+  readonly observeCompletion?: ProjectSetupScriptRunnerInput["observeCompletion"];
+};
+
 export class ProjectSetupScriptRunner extends Context.Service<
   ProjectSetupScriptRunner,
   {
     readonly runForThread: (
       input: ProjectSetupScriptRunnerInput,
     ) => Effect.Effect<ProjectSetupScriptRunnerResult, ProjectSetupScriptRunnerError>;
+    readonly launchScriptTerminal: (
+      input: ScriptTerminalInput,
+    ) => Effect.Effect<
+      ProjectSetupScriptRunnerResultStarted,
+      TerminalError | ProjectSetupScriptUnsupportedShellError
+    >;
   }
 >()("t3/project/ProjectSetupScriptRunner") {}
 
@@ -520,7 +539,6 @@ export const make = Effect.gen(function* () {
         ),
       );
     }
-    const cwd = input.worktreePath;
     const env = {
       ...projectScriptRuntimeEnv({
         project: { cwd: project.workspaceRoot },
@@ -530,140 +548,162 @@ export const make = Effect.gen(function* () {
       COLORTERM: "",
       // Project scripts keep the default shell; the preference is for interactive terminals only.
       T3CODE_TERMINAL_SHELL: "",
+      NO_COLOR: "1",
+      FORCE_COLOR: "0",
     };
-    const observe = input.observeCompletion;
-    const completionToken = observe ? (yield* random.uuidV4()).replaceAll("-", "") : null;
-    const echoedWrapperLines: string[] = [];
-    // Subscribe before opening so neither startup activity nor the sentinel can race the listeners.
-    const observed =
-      observe && completionToken
-        ? yield* observeTerminalCompletion({
-            threadId: input.threadId,
-            terminalId,
-            sentinel: completionSentinel(completionToken),
-            sentinelPattern: completionSentinelPattern(completionToken),
-            echoedWrapperLines,
-            onOutputLine: observe.onOutputLine,
-          })
-        : undefined;
-    const readiness = yield* watchShellReadiness({
+    return yield* launchScriptTerminal({
       threadId: input.threadId,
       terminalId,
-      onStartupPrompt: observed?.flushPartialLine ?? Effect.void,
-    });
-    const { completionShell, commandLine } = yield* Effect.gen(function* () {
-      const shell = yield* terminalManager
-        .open({
-          threadId: input.threadId,
-          terminalId,
-          stopOnSettle: script.stopOnSettle ?? false,
-          cwd,
-          worktreePath: input.worktreePath,
-          env: { ...env, NO_COLOR: "1", FORCE_COLOR: "0" },
-        })
-        .pipe(
-          Effect.andThen(() =>
-            terminalManager
-              .getShell({ threadId: input.threadId, terminalId })
-              .pipe(Effect.catchTags({ TerminalNotRunningError: () => Effect.succeed(null) })),
-          ),
-          Effect.mapError(
-            (cause) =>
-              new ProjectSetupScriptOperationError({
-                ...errorContext,
-                operation: "openTerminal",
-                cause,
-              }),
-          ),
-        );
-      if (shell === null) {
-        yield* observed?.abandon ?? Effect.void;
-        return { completionShell: null, commandLine: null };
-      }
-      const completionShell = resolveCompletionShell(shell);
-      let commandLine = script.command;
-      if (observe && completionToken) {
-        if (completionShell === null) {
-          yield* terminalManager.closeIdle({ threadId: input.threadId, terminalId });
-          return yield* new ProjectSetupScriptUnsupportedShellError({ shell });
-        }
-        commandLine = wrapCommandForCompletion(
-          script.command,
-          completionShell,
-          completionSentinel(completionToken),
-        );
-      }
-      echoedWrapperLines.push(...commandLine.split("\r").filter((line) => line.length > 0));
-      return { completionShell, commandLine };
+      cwd: input.worktreePath,
+      worktreePath: input.worktreePath,
+      script,
+      env,
+      observeCompletion: input.observeCompletion,
     }).pipe(
-      Effect.onError(() =>
-        Effect.sync(() => {
-          observed?.unsubscribe();
-          readiness.unsubscribe();
-        }),
-      ),
-    );
-
-    // Return once the terminal exists so callers can show it while a startup prompt waits.
-    // PowerShell and cmd have no line-editor signal.
-    const commandWriter = yield* (
-      completionShell === "powershell" || completionShell === null
-        ? Effect.succeed("ready" as const)
-        : readiness.wait
-    ).pipe(
-      Effect.flatMap((shell) =>
-        shell === "exited" || commandLine === null
-          ? Effect.void
-          : terminalManager.write({
-              threadId: input.threadId,
-              terminalId,
-              // macOS zsh garbles long typed-ahead multiline input; a live line editor takes it as one paste.
-              data: projectScriptTerminalInput(
-                shell === "ready" && completionShell === "posix" && commandLine.includes("\r")
-                  ? `\x1b[200~${commandLine.replaceAll("\r", "\n")}\x1b[201~`
-                  : commandLine,
-              ),
+      Effect.mapError((cause) =>
+        cause._tag === "ProjectSetupScriptUnsupportedShellError"
+          ? cause
+          : new ProjectSetupScriptOperationError({
+              ...errorContext,
+              operation: "openTerminal",
+              cause,
             }),
       ),
-      Effect.catchCause((cause) =>
-        Effect.logWarning("project script command was not written", {
-          ...errorContext,
-          terminalId,
-          cause,
-        }).pipe(Effect.andThen(observed?.abandon ?? Effect.void)),
-      ),
-      Effect.ensuring(Effect.sync(() => readiness.unsubscribe())),
-      Effect.forkIn(serviceScope),
     );
-
-    const completion = observed?.completion.pipe(
-      Effect.onInterrupt(() =>
-        Fiber.interrupt(commandWriter).pipe(
-          Effect.andThen(Effect.sync(() => readiness.unsubscribe())),
-          Effect.andThen(terminalManager.close({ threadId: input.threadId, terminalId })),
-          Effect.ignore,
-        ),
-      ),
-      Effect.tap(({ exitCode }) =>
-        exitCode === 0
-          ? terminalManager.closeIdle({ threadId: input.threadId, terminalId })
-          : Effect.void,
-      ),
-    );
-
-    return {
-      status: "started",
-      scriptId: script.id,
-      scriptName: script.name,
-      scriptCommand: script.command,
-      terminalId,
-      cwd,
-      async: script.async !== false,
-      ...(completion ? { completion } : {}),
-    } as const;
   });
 
-  return ProjectSetupScriptRunner.of({ runForThread });
+  const launchScriptTerminal = Effect.fn("ProjectSetupScriptRunner.launchScriptTerminal")(
+    function* (input: ScriptTerminalInput) {
+      const { script, terminalId, cwd } = input;
+      const observe = input.observeCompletion;
+      const completionToken = observe ? (yield* random.uuidV4()).replaceAll("-", "") : null;
+      const echoedWrapperLines: string[] = [];
+      // Subscribe before opening so neither startup activity nor the sentinel can race the listeners.
+      const observed =
+        observe && completionToken
+          ? yield* observeTerminalCompletion({
+              threadId: input.threadId,
+              terminalId,
+              sentinel: completionSentinel(completionToken),
+              sentinelPattern: completionSentinelPattern(completionToken),
+              echoedWrapperLines,
+              onOutputLine: observe.onOutputLine,
+            })
+          : undefined;
+      const readiness = yield* watchShellReadiness({
+        threadId: input.threadId,
+        terminalId,
+        onStartupPrompt: observed?.flushPartialLine ?? Effect.void,
+      });
+      const { completionShell, commandLine } = yield* Effect.gen(function* () {
+        const shell = yield* terminalManager
+          .open({
+            threadId: input.threadId,
+            terminalId,
+            stopOnSettle: script.stopOnSettle ?? false,
+            cwd,
+            worktreePath: input.worktreePath,
+            env: input.env,
+          })
+          .pipe(
+            Effect.andThen(() =>
+              terminalManager
+                .getShell({ threadId: input.threadId, terminalId })
+                .pipe(Effect.catchTags({ TerminalNotRunningError: () => Effect.succeed(null) })),
+            ),
+          );
+        if (shell === null) {
+          yield* observed?.abandon ?? Effect.void;
+          return { completionShell: null, commandLine: null };
+        }
+        const completionShell = resolveCompletionShell(shell);
+        let commandLine = script.command;
+        if (observe && completionToken) {
+          if (completionShell === null) {
+            yield* terminalManager.closeIdle({ threadId: input.threadId, terminalId });
+            return yield* new ProjectSetupScriptUnsupportedShellError({ shell });
+          }
+          commandLine = wrapCommandForCompletion(
+            script.command,
+            completionShell,
+            completionSentinel(completionToken),
+          );
+        }
+        echoedWrapperLines.push(...commandLine.split("\r").filter((line) => line.length > 0));
+        return { completionShell, commandLine };
+      }).pipe(
+        Effect.onError(() =>
+          Effect.sync(() => {
+            observed?.unsubscribe();
+            readiness.unsubscribe();
+          }),
+        ),
+      );
+
+      // Return once the terminal exists so callers can show it while a startup prompt waits.
+      // PowerShell and cmd have no line-editor signal.
+      const commandWriter = yield* (
+        completionShell === "powershell" || completionShell === null
+          ? Effect.succeed("ready" as const)
+          : readiness.wait
+      ).pipe(
+        Effect.flatMap((shell) =>
+          shell === "exited" || commandLine === null
+            ? Effect.void
+            : terminalManager.write({
+                threadId: input.threadId,
+                terminalId,
+                // macOS zsh garbles long typed-ahead multiline input; a live line editor takes it as one paste.
+                data: projectScriptTerminalInput(
+                  shell === "ready" &&
+                    completionShell === "posix" &&
+                    (observe ? commandLine.includes("\r") : /[\r\n]/.test(commandLine))
+                    ? `\x1b[200~${commandLine.replace(/\r\n?/g, "\n")}\x1b[201~`
+                    : commandLine,
+                ),
+              }),
+        ),
+        Effect.catchCause((cause) =>
+          Effect.logWarning("project script command was not written", {
+            threadId: input.threadId,
+            cwd,
+            terminalId,
+            cause,
+          }).pipe(Effect.andThen(observed?.abandon ?? Effect.void)),
+        ),
+        Effect.ensuring(Effect.sync(() => readiness.unsubscribe())),
+        Effect.forkIn(serviceScope),
+      );
+
+      const completion = observed?.completion.pipe(
+        Effect.onInterrupt(() =>
+          Fiber.interrupt(commandWriter).pipe(
+            Effect.andThen(Effect.sync(() => readiness.unsubscribe())),
+            Effect.andThen(terminalManager.close({ threadId: input.threadId, terminalId })),
+            Effect.ignore,
+          ),
+        ),
+        Effect.tap(({ exitCode }) =>
+          exitCode === 0
+            ? terminalManager.closeIdle({ threadId: input.threadId, terminalId })
+            : Effect.void,
+        ),
+      );
+
+      return {
+        status: "started",
+        scriptId: script.id,
+        scriptName: script.name,
+        scriptCommand: script.command,
+        terminalId,
+        cwd,
+        async: script.async !== false,
+        ...(completion ? { completion } : {}),
+      } as const;
+    },
+  );
+
+  return ProjectSetupScriptRunner.of({ runForThread, launchScriptTerminal });
 });
 
 export const layer = Layer.effect(ProjectSetupScriptRunner, make);

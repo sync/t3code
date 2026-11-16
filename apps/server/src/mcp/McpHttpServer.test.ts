@@ -57,6 +57,7 @@ import { advertisedJsonSchema } from "./advertisedJsonSchema.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpToolAccess from "./McpToolAccess.ts";
 import * as McpToolAccessTestkit from "./McpToolAccess.testkit.ts";
+import * as ProjectDeviceRunner from "../project/ProjectDeviceRunner.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
@@ -245,6 +246,7 @@ it.effect.each([
     }).pipe(
       Effect.provide(
         McpHttpServer.layerDeviceToolkit.pipe(
+          Layer.provide(Layer.mock(ProjectDeviceRunner.ProjectDeviceRunner)({})),
           Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
           Layer.provide(McpToolAccessTestkit.liveThreadsLayer),
           Layer.provide(

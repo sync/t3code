@@ -14,7 +14,9 @@ import { McpSchema, McpServer } from "effect/ai";
 
 import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
+import * as ProjectDeviceRunner from "../project/ProjectDeviceRunner.ts";
 import * as ProjectService from "../project/ProjectService.ts";
+import * as ThreadManagement from "../orchestration-v2/ThreadManagementService.ts";
 import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpToolAccessTestkit from "./McpToolAccess.testkit.ts";
@@ -146,7 +148,19 @@ const layerDeviceServiceMock = Layer.mock(DeviceService.DeviceService)({
     Effect.succeedSome(`/state/device/targets/thread-device/${targetArgs.join("_")}/agent-device`),
 });
 
-const layerTest = McpHttpServer.layerDeviceToolkit.pipe(
+const layerToolkit = McpHttpServer.layerDeviceToolkit.pipe(
+  Layer.provide(
+    Layer.mock(ProjectDeviceRunner.ProjectDeviceRunner)({
+      run: ({ threadId: target, deviceId, port = 8081 }) =>
+        Effect.sync(() => {
+          expect(target).toBe(threadId);
+          return { status: "started", terminalId: "device-test", deviceId, port } as const;
+        }),
+    }),
+  ),
+);
+
+const layerTest = layerToolkit.pipe(
   Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
   Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
   Layer.provideMerge(layerDeviceServiceMock),
@@ -160,7 +174,13 @@ it.effect("registers the device tools and returns the screenshot as image conten
     Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const names = server.tools.map(({ tool }) => tool.name).toSorted();
-      expect(names).toEqual(["device_close", "device_list", "device_open", "device_screenshot"]);
+      expect(names).toEqual([
+        "device_close",
+        "device_list",
+        "device_open",
+        "device_run_project",
+        "device_screenshot",
+      ]);
 
       const callWith = (capabilities: ReadonlyArray<McpInvocationContext.McpCapability>) =>
         Effect.provideService(McpInvocationContext.McpInvocationContext, invocation(capabilities));
@@ -242,6 +262,52 @@ it.effect("registers the device tools and returns the screenshot as image conten
   ).pipe(Effect.provide(layerTest)),
 );
 
+it.effect.each([
+  { interactionMode: "default" as const, isError: false },
+  { interactionMode: "plan" as const, isError: true },
+])(
+  "runs the saved device action only in default mode ($interactionMode)",
+  ({ interactionMode, isError }) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* McpServer.McpServer;
+        const result = yield* server
+          .callTool({
+            name: "device_run_project",
+            arguments: { platform: "ios", deviceId: device.id, port: 8082 },
+          })
+          .pipe(
+            Effect.provideService(
+              McpInvocationContext.McpInvocationContext,
+              invocation(["device"]),
+            ),
+            Effect.provideService(McpSchema.McpServerClient, client),
+            Effect.provideServiceEffect(
+              ThreadManagement.ThreadManagementService,
+              Effect.map(ThreadManagement.ThreadManagementService, (threads) => ({
+                ...threads,
+                getThreadShell: (id) =>
+                  Effect.succeed(McpToolAccessTestkit.liveThreadShell(id, { interactionMode })),
+              })),
+            ),
+          );
+        expect(result.isError === true).toBe(isError);
+        if (isError) {
+          expect(result.content).toEqual([
+            expect.objectContaining({ text: expect.stringContaining("requires full access") }),
+          ]);
+        } else {
+          expect(result.structuredContent).toEqual({
+            status: "started",
+            terminalId: "device-test",
+            deviceId: device.id,
+            port: 8082,
+          });
+        }
+      }),
+    ).pipe(Effect.provide(layerTest)),
+);
+
 it.effect("rejects unavailable agent access before booting or opening a device", () => {
   const layerUnavailable = Layer.mock(DeviceService.DeviceService)({
     list: Effect.succeed(state),
@@ -271,7 +337,7 @@ it.effect("rejects unavailable agent access before booting or opening a device",
   }).pipe(
     Effect.scoped,
     Effect.provide(
-      McpHttpServer.layerDeviceToolkit.pipe(
+      layerToolkit.pipe(
         Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
         Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
         Layer.provide(layerUnavailable),
@@ -323,7 +389,7 @@ it.effect("device_open reports a failed host's setup error instead of no devices
   }).pipe(
     Effect.scoped,
     Effect.provide(
-      McpHttpServer.layerDeviceToolkit.pipe(
+      layerToolkit.pipe(
         Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
         Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
         Layer.provide(layerFailed),
@@ -463,7 +529,7 @@ describe("device targeting across hosts", () => {
     return program({ opened, closed, call }).pipe(
       Effect.scoped,
       Effect.provide(
-        McpHttpServer.layerDeviceToolkit.pipe(
+        layerToolkit.pipe(
           Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
           Layer.provideMerge(McpToolAccessTestkit.liveThreadsLayer),
           Layer.provide(layerDevices),

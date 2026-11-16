@@ -60,10 +60,22 @@ describe("resolveProjectSettings", () => {
       defaultAutoPull: true,
       sidebarAutoSettleAfterDays: 3,
       projectSettingsOverrides: {
-        [projectId]: { defaultAutoPull: false, sidebarAutoSettleAfterDays: null },
+        [projectId]: {
+          defaultAutoPull: false,
+          sidebarAutoSettleAfterDays: null,
+          runOnDeviceEnabled: true,
+          runOnDeviceIosCommand: "ios",
+          runOnDeviceAndroidCommand: "android",
+        },
       },
     });
     const resolved = resolveProjectSettings(settings, projectId);
+    expect(resolved.settings.runOnDeviceEnabled).toBe(true);
+    expect(resolved.settings.runOnDeviceIosCommand).toBe("ios");
+    expect(resolved.settings.runOnDeviceAndroidCommand).toBe("android");
+    expect(resolveProjectSettings(settings, otherProjectId).settings.runOnDeviceEnabled).toBe(
+      false,
+    );
     expect(resolved.settings.defaultAutoPull).toBe(false);
     expect(resolved.settings.sidebarAutoSettleAfterDays).toBeNull();
     expect(resolved.settings.defaultThreadEnvMode).toBe(settings.defaultThreadEnvMode);

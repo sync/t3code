@@ -302,3 +302,39 @@ On mobile, use **Settings → Source control & issues** to change selected envir
 T3 Code only pulls when it can fast-forward and the checkout has no changed files, untracked files,
 or local commits. It skips checkouts on another branch or without an upstream. If a checkout has
 local work, resolve it yourself before automatic pulls can resume.
+
+## Run on device
+
+Select a project in **Settings → Projects**, turn on **Enable run on device**, and enter an iOS
+or Android build command. In a thread, choose **Run on iOS** or **Run on Android** from Actions,
+select a local simulator or emulator, and optionally enter a port. An empty port uses 8081;
+an empty build command hides that platform's action.
+
+Stopped devices start before the build runs. Commands run from the thread's checkout or worktree
+and receive `SELECTED_DEVICE_ID`, `SELECTED_DEVICE_NAME`, and `SELECTED_PORT` as environment
+variables. The ID is the iOS simulator UUID or the running Android device serial. Expo's Android
+`--device` option expects the name instead. For example:
+
+```sh
+cd apps/mobile
+APP_ENV=sandbox pnpm expo run:ios --scheme 'Zip Sandbox' \
+  --device "${SELECTED_DEVICE_ID}" --port "${SELECTED_PORT}" ../..
+```
+
+For Expo Android, use `--device "${SELECTED_DEVICE_NAME}"`:
+
+```sh
+cd apps/mobile
+APP_ENV=sandbox pnpm expo run:android --variant standardSandboxDebug \
+  --app-id co.zip.sandbox.debug --device "${SELECTED_DEVICE_NAME}" \
+  --port "${SELECTED_PORT}" ../..
+```
+
+Enable **Use devices** in Settings → Devices first. The picker uses devices local to the thread's
+environment, so a thread on a remote Mac uses that Mac's devices. Simlock pools, SSH device sources,
+and physical devices are excluded.
+
+With **Agent device access** enabled, an agent in a full-access thread in default mode can run
+the same saved command. Ask it to “Use T3's Run on Android action on Resizable, port 8082”
+(or name an iOS simulator). It can use `device_list` to find the device and `device_run_project`
+to start the build. The tool returns the build terminal, not the build result.

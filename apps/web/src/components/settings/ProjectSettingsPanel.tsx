@@ -52,6 +52,7 @@ import {
   canPickExternalProjectFavicon,
   ProjectFaviconPickerDialog,
 } from "./ProjectFaviconPickerDialog";
+import { ProjectDeviceRunSettings } from "./ProjectDeviceRunSettings";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import { ProjectRepositoriesSettings } from "./ProjectRepositoriesSettings";
@@ -692,6 +693,7 @@ function ProjectDetail({
           ) : null}
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
+        <ProjectDeviceRunSettings />
         <ProjectActionsSettings />
         <ProjectRepositoriesSettings members={group.memberProjects} />
         {checkoutChoices}

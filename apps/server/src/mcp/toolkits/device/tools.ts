@@ -5,6 +5,8 @@ import {
   DeviceToolListResult,
   DeviceToolOpenInput,
   DeviceToolOpenResult,
+  DeviceToolRunProjectInput,
+  DeviceRunProjectResult,
   DeviceToolScreenshotResult,
   DeviceToolTargetInput,
 } from "@t3tools/contracts";
@@ -18,6 +20,7 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as DeviceService from "../../../device/DeviceService.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ProjectService from "../../../project/ProjectService.ts";
+import * as ProjectDeviceRunner from "../../../project/ProjectDeviceRunner.ts";
 
 const dependencies = [
   McpInvocationContext.McpInvocationContext,
@@ -29,7 +32,7 @@ const DeviceToolFailure = Schema.Union([DeviceToolError, OrchestratorMcpFailure]
 
 const DeviceListTool = Tool.make("device_list", {
   description:
-    "List iOS Simulators and Android Emulators on every device host, what each host can run, and what is open in this thread's Device panel. Call before `device_open` when you do not know a device id.",
+    "List iOS Simulators and Android Emulators on every device host, what each host can run, and what is open in this thread's Device panel. Call before `device_open` or `device_run_project` when you do not know a device id.",
   // An empty struct serializes as `anyOf [object, array]`, which some
   // providers reject and then drop every tool on the server with it.
   parameters: Schema.Struct({
@@ -85,6 +88,25 @@ export const DeviceScreenshotTool = Tool.make("device_screenshot", {
   .annotate(Tool.OpenWorld, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
+const DeviceRunProjectTool = Tool.make("device_run_project", {
+  description:
+    "Use T3's Run on iOS or Run on Android action for the calling thread. Pass a local simulator or emulator ID from device_list. Boots it and starts the build command saved in Project Settings, in this thread's checkout, with the selected device and optional port. Returns the terminal ID once launched, not a build result. Requires full access in default mode and agent device access. Does not accept shell commands.",
+  parameters: DeviceToolRunProjectInput,
+  success: DeviceRunProjectResult,
+  failure: DeviceToolFailure,
+  dependencies: [
+    McpInvocationContext.McpInvocationContext,
+    ThreadManagementService.ThreadManagementService,
+    ProjectDeviceRunner.ProjectDeviceRunner,
+  ],
+})
+  .annotate(Tool.Title, "Run project on device")
+  .annotate(Tool.Readonly, false)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, false)
+  .annotate(Tool.OpenWorld, true)
+  .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
+
 const DeviceCloseTool = Tool.make("device_close", {
   description:
     "Remove a device from this thread's Device panel. `shutdown=true` also turns it off.",
@@ -100,7 +122,12 @@ const DeviceCloseTool = Tool.make("device_close", {
   .annotate(Tool.OpenWorld, true)
   .annotate(McpSchema.EnabledWhen, McpInvocationContext.hiddenFromOutsideClients);
 
-export const DeviceStandardToolkit = Toolkit.make(DeviceListTool, DeviceOpenTool, DeviceCloseTool);
+export const DeviceStandardToolkit = Toolkit.make(
+  DeviceListTool,
+  DeviceOpenTool,
+  DeviceCloseTool,
+  DeviceRunProjectTool,
+);
 
 export const DeviceScreenshotToolkit = Toolkit.make(DeviceScreenshotTool);
 
@@ -109,4 +136,5 @@ export const DeviceToolkit = Toolkit.make(
   DeviceOpenTool,
   DeviceScreenshotTool,
   DeviceCloseTool,
+  DeviceRunProjectTool,
 );

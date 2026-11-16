@@ -125,6 +125,41 @@ it("requires operate permission for tool updates even alongside a read-only chec
 });
 
 describe("RPC scope middleware", () => {
+  it.effect.each([AuthTerminalOperateScope, AuthOrchestrationOperateScope])(
+    "rejects running a project on a device with only %s",
+    (scope) =>
+      Effect.gen(function* () {
+        const method = WS_METHODS.deviceRunProject;
+        const group = WsRpcGroup.omit(
+          ...[...WsRpcGroup.requests.keys()].filter(
+            (tag): tag is Exclude<keyof typeof RPC_REQUIRED_SCOPES, typeof method> =>
+              tag !== method,
+          ),
+        );
+        const client = yield* RpcTest.makeClient(group).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              group.toLayerHandler(method, () => Effect.die("unauthorized launch")),
+              RpcAuthorization.layer([scope]),
+            ),
+          ),
+        );
+        expect(
+          yield* client[method]({
+            threadId: ThreadId.make("thread-test"),
+            platform: "ios",
+            deviceId: "simulator-test",
+          }).pipe(Effect.flip),
+        ).toMatchObject({
+          _tag: "EnvironmentAuthorizationError",
+          requiredPermission:
+            scope === AuthTerminalOperateScope
+              ? AuthOrchestrationOperateScope
+              : AuthTerminalOperateScope,
+        });
+      }),
+  );
+
   const tested = [WS_METHODS.serverProbe, WS_METHODS.serverRetryResourceTelemetry] as const;
   const group = WsRpcGroup.omit(
     ...[...WsRpcGroup.requests.keys()].filter(

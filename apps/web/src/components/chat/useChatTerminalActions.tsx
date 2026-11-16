@@ -5,6 +5,12 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import {
+  isProjectDeviceRunScript,
+  type ProjectDeviceRunScript,
+} from "@t3tools/shared/projectDeviceRun";
+import { ProjectDeviceRunDialog } from "../device/ProjectDeviceRunDialog";
+import { useState } from "react";
 import type { Dispatch } from "react";
 import type { ComposerHandleRef } from "../../composerHandleContext";
 import type { selectThreadTerminalUiState } from "../../terminalUiStateStore";
@@ -204,18 +210,25 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     storeCloseTerminal(activeThreadRef, terminalId);
     focusActiveDrawerTerminal(activeThreadRef);
   };
+  const [deviceRun, setDeviceRun] = useState<{
+    key: string;
+    script: ProjectDeviceRunScript;
+  } | null>(null);
+  const deviceRunKey = `${environmentId}:${activeThreadId}`;
   const runProjectScript = async (
     script: ProjectScript,
     options?: {
       cwd?: string;
-      env?: Record<string, string>;
       worktreePath?: string | null;
-      preferNewTerminal?: boolean;
       rememberAsLastInvoked?: boolean;
       shellHistory?: "preserve" | "suppress";
     },
   ) => {
     if (!hasTerminalWriteAccess() || !activeThreadId || !activeProject || !activeThread) return;
+    if (isProjectDeviceRunScript(script)) {
+      setDeviceRun({ key: deviceRunKey, script });
+      return;
+    }
     if (options?.rememberAsLastInvoked !== false) {
       setLastInvokedScriptByProjectId((current) => {
         if (current[activeProject.id] === script.id) return current;
@@ -225,7 +238,6 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
     const reusableTerminalId =
       script.stopOnSettle ||
-      options?.preferNewTerminal ||
       !canReuseTerminal ||
       !readEnvironmentScope(environmentId, AuthTerminalReadScope)
         ? null
@@ -263,7 +275,6 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
         : { terminalId: reusableTerminalId }),
       location: { cwd: targetCwd, worktreePath: targetWorktreePath },
       stopOnSettle: script.stopOnSettle ?? false,
-      ...(options?.env ? { extraEnv: options.env } : {}),
     });
     if (!launched) return;
     const targetTerminalId = launched.terminalId;
@@ -464,6 +475,23 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     requestClosePanelTerminalStable,
     requestCloseTerminalStable,
     runProjectScriptStable,
+    deviceRunDialog:
+      activeThreadRef && activeProject && deviceRun?.key === deviceRunKey ? (
+        <ProjectDeviceRunDialog
+          key={`${deviceRunKey}:${deviceRun.script.id}`}
+          threadRef={activeThreadRef}
+          script={deviceRun.script}
+          onClose={() => setDeviceRun(null)}
+          onStarted={(terminalId) => {
+            setLastInvokedScriptByProjectId((current) => ({
+              ...current,
+              [activeProject.id]: deviceRun.script.id,
+            }));
+            storeEnsureTerminal(activeThreadRef, terminalId, { open: true });
+            focusTerminal(activeThreadRef, terminalId);
+          }}
+        />
+      ) : null,
     runShellCommandStable,
     setTerminalOpenStable,
     splitPanelTerminalStable,
