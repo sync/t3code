@@ -62,6 +62,7 @@ const layerTest = (input: {
   readonly env?: Record<string, string>;
   readonly path?: Path.Path;
   readonly ghosttyApplicationPaths?: ReadonlyArray<string>;
+  readonly towerApplicationPath?: string;
   readonly resolveExecutable?: (command: string) => string | undefined;
   readonly onSpawn?: (command: ChildProcess.StandardCommand) => void;
   readonly onUnref?: () => void;
@@ -98,6 +99,10 @@ const layerTest = (input: {
     ),
     Layer.succeed(HostProcess.Platform, input.platform),
     Layer.succeed(ExternalLauncher.GhosttyApplicationPaths, input.ghosttyApplicationPaths ?? []),
+    Layer.succeed(
+      ExternalLauncher.TowerApplicationPath,
+      input.towerApplicationPath ?? "/missing/Tower.app",
+    ),
     Layer.succeed(
       SpawnExecutableResolution,
       (command) => input.resolveExecutable?.(command) ?? command,
@@ -1572,5 +1577,78 @@ it.effect("rejects file and missing Ghostty targets", () =>
       yield* rejectTarget(path.join(tempDir, "missing")),
       ExternalLauncher.ExternalLauncherEditorSpawnError,
     );
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("discovers Tower only when its macOS app is installed", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const temp = yield* fs.makeTempDirectoryScoped({ prefix: "t3-tower-" });
+    const app = path.join(temp, "Tower.app");
+    yield* fs.makeDirectory(path.join(app, "Contents", "MacOS"), { recursive: true });
+    yield* fs.writeFileString(path.join(app, "Contents", "MacOS", "Tower"), "");
+    for (const [platform, installed, expected] of [
+      ["darwin", true, true],
+      ["darwin", false, false],
+      ["linux", true, false],
+      ["win32", true, false],
+    ] as const) {
+      const available = yield* Effect.gen(function* () {
+        const launcher = yield* ExternalLauncher.ExternalLauncher;
+        return yield* launcher.resolveAvailableEditors();
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            platform,
+            env: { PATH: "" },
+            towerApplicationPath: installed ? app : path.join(temp, "Missing.app"),
+          }),
+        ),
+      );
+      assert.equal(available.includes("tower"), expected);
+    }
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("opens directories in Tower with a literal path and rejects files", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const temp = yield* fs.makeTempDirectoryScoped({ prefix: "t3-tower-" });
+    const app = path.join(temp, "Tower.app");
+    yield* fs.makeDirectory(path.join(app, "Contents", "MacOS"), { recursive: true });
+    yield* fs.writeFileString(path.join(app, "Contents", "MacOS", "Tower"), "");
+    const target = path.join(temp, `project's files "quotes" $value`);
+    yield* fs.makeDirectory(target);
+    const file = path.join(target, "source.ts");
+    yield* fs.writeFileString(file, "export {};");
+    const commands: ChildProcess.StandardCommand[] = [];
+    yield* Effect.gen(function* () {
+      const launcher = yield* ExternalLauncher.ExternalLauncher;
+      yield* launcher.launchEditor({ editor: "tower", cwd: target });
+      assert.equal(commands.length, 1);
+      assert.equal(commands[0]!.command, "/usr/bin/open");
+      assert.deepEqual(commands[0]!.args, ["-a", app, target]);
+      for (const cwd of [file, path.join(temp, "missing")]) {
+        const error = yield* launcher.launchEditor({ editor: "tower", cwd }).pipe(Effect.flip);
+        assert.instanceOf(error, ExternalLauncher.ExternalLauncherEditorSpawnError);
+      }
+      assert.equal(commands.length, 1);
+    }).pipe(
+      Effect.provide(
+        layerTest({
+          platform: "darwin",
+          env: { PATH: "/usr/bin" },
+          towerApplicationPath: app,
+          onSpawn: (command) => commands.push(command),
+        }),
+      ),
+    );
+    const error = yield* Effect.gen(function* () {
+      const launcher = yield* ExternalLauncher.ExternalLauncher;
+      return yield* launcher.launchEditor({ editor: "tower", cwd: target }).pipe(Effect.flip);
+    }).pipe(Effect.provide(layerTest({ platform: "linux", towerApplicationPath: app })));
+    assert.instanceOf(error, ExternalLauncher.ExternalLauncherUnsupportedEditorError);
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );

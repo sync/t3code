@@ -13,6 +13,7 @@ import { OPEN_FAVORITE_EDITOR_ATTRIBUTE } from "./OpenInPickerShortcut";
 import {
   availableFileEditors,
   availableProjectOpeners,
+  isHostProjectOpener,
   usePreferredEditor,
   usePreferredProjectOpener,
 } from "../../editorPreferences";
@@ -24,7 +25,12 @@ import {
   useRemoteOpenState,
 } from "../../remoteOpen";
 import { useEnvironment } from "../../state/environments";
-import { ChevronDownIcon, FolderClosedIcon, SquareArrowOutUpRightIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  FolderClosedIcon,
+  GitForkIcon,
+  SquareArrowOutUpRightIcon,
+} from "lucide-react";
 
 import { Group, GroupSeparator } from "../ui/group";
 import {
@@ -140,6 +146,11 @@ export const resolveOpenInOptions = (
       Icon: GhosttyIcon,
       value: "ghostty",
       kind: "brand",
+    },
+    {
+      Icon: GitForkIcon,
+      value: "tower",
+      kind: "generic",
     },
     {
       Icon: IntelliJIdeaIcon,
@@ -260,23 +271,21 @@ export const OpenInPicker = memo(function OpenInPicker({
   const remote = useRemoteOpenState(environmentId);
   const canOperateHost = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const isHostEditorDenied = remote.mode === "local-exec" && !canOperateHost;
-  const canOpenGhostty =
-    mode === "project" && canOperateHost && availableEditors.includes("ghostty");
+  const hostProjectOpeners =
+    mode === "project" && canOperateHost ? availableEditors.filter(isHostProjectOpener) : [];
   const canOpenEditor =
-    (remote.mode !== "remote-unavailable" || canOpenGhostty) && !isHostEditorDenied;
+    (remote.mode !== "remote-unavailable" || hostProjectOpeners.length > 0) && !isHostEditorDenied;
   const [menuOpen, setMenuOpen] = useComposerMenuState(isHostEditorDenied);
   const remoteCapableEditors = useRemoteCapableEditors();
   const [remoteHintSeen, markRemoteHintSeen] = useRemoteOpenHint();
   const environmentLabel = useEnvironment(environmentId)?.label ?? "this machine";
-  // Remote editors run on the viewing machine; Ghostty opens on the environment host.
+  // Remote editors run on the viewing machine; project-only apps open on the environment host.
   const effectiveEditors =
     remote.mode === "local-exec"
       ? availableEditors
-      : remote.mode === "remote-unavailable" && canOpenGhostty
-        ? ["ghostty" as const]
-        : canOpenGhostty
-          ? [...remoteCapableEditors, "ghostty" as const]
-          : remoteCapableEditors;
+      : remote.mode === "remote-unavailable"
+        ? hostProjectOpeners
+        : [...remoteCapableEditors, ...hostProjectOpeners];
   const [preferredFileEditor, setPreferredFileEditor] = usePreferredEditor(effectiveEditors);
   const [preferredProjectOpener, setPreferredProjectOpener] =
     usePreferredProjectOpener(effectiveEditors);
@@ -288,8 +297,8 @@ export const OpenInPicker = memo(function OpenInPicker({
     if (!openInCwd) return false;
     const editor = editorId ?? preferredEditor;
     if (!editor) return false;
-    if (editor !== "ghostty" && remote.mode === "remote-unavailable") return false;
-    if (editor !== "ghostty" && remote.mode === "remote-links") {
+    if (!isHostProjectOpener(editor) && remote.mode === "remote-unavailable") return false;
+    if (!isHostProjectOpener(editor) && remote.mode === "remote-links") {
       const url = buildRemoteOpenUrl({
         editor,
         ...remote.host,
@@ -340,7 +349,7 @@ export const OpenInPicker = memo(function OpenInPicker({
 
   const editorItems = (
     <>
-      {unavailableReason !== null && !canOpenGhostty ? (
+      {unavailableReason !== null && hostProjectOpeners.length === 0 ? (
         <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
           {unavailableReason}
         </MenuItem>
@@ -356,7 +365,7 @@ export const OpenInPicker = memo(function OpenInPicker({
               density={presentation === "menu" ? "touch" : "default"}
               disabled={
                 !openInCwd ||
-                (value === "ghostty"
+                (isHostProjectOpener(value)
                   ? !canOperateHost
                   : !canOpenEditor || remote.mode === "remote-unavailable")
               }
@@ -379,11 +388,13 @@ export const OpenInPicker = memo(function OpenInPicker({
                 )}
             </MenuItem>
           ))}
-          {remote.mode === "remote-links" && preferredEditor !== "ghostty" && !remoteHintSeen && (
-            <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
-              Opens over SSH. Needs your key on {environmentLabel}
-            </MenuItem>
-          )}
+          {remote.mode === "remote-links" &&
+            !isHostProjectOpener(preferredEditor) &&
+            !remoteHintSeen && (
+              <MenuItem density={presentation === "menu" ? "touch" : "default"} disabled>
+                Opens over SSH. Needs your key on {environmentLabel}
+              </MenuItem>
+            )}
         </>
       )}
     </>

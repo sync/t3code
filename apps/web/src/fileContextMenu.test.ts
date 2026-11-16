@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 const run = vi.hoisted(() => vi.fn());
 vi.mock("@effect/atom-react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@effect/atom-react")>()),
-  useAtomValue: () => ({ availableEditors: ["idea", "ghostty", "file-manager"] }),
+  useAtomValue: () => ({ availableEditors: ["idea", "ghostty", "tower", "file-manager"] }),
 }));
 vi.mock("./state/server", () => ({
   serverEnvironment: { configValueAtom: () => undefined },
@@ -61,5 +61,6 @@ it("excludes project-only apps from file actions", async () => {
     { id: "editor:idea", label: "IntelliJ IDEA" },
   ]);
   await menu.activate("editor:ghostty", BASE_TARGET);
+  await menu.activate("editor:tower", BASE_TARGET);
   expect(run).not.toHaveBeenCalled();
 });

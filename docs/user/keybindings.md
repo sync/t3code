@@ -123,9 +123,9 @@ in its front window; otherwise it creates a window. macOS may ask for Automation
 first time T3 Code controls Ghostty. Ghostty can also disable this integration through its
 `macos-applescript` setting.
 
-Ghostty is an additional project opener. IntelliJ IDEA remains available for both projects
-and files. Ghostty always opens on the Mac hosting the selected environment, including
-when you connect remotely.
+Tower also appears when installed at `/Applications/Tower.app` and opens the thread's checkout
+or worktree. Ghostty and Tower open on the Mac hosting the selected environment, including when
+you connect remotely. They appear only for projects; IntelliJ IDEA remains available for files too.
 
 ## Rule shape
 

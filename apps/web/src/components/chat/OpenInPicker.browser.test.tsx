@@ -143,12 +143,16 @@ async function setup() {
     return event;
   }
 
-  function FavoriteEditorFallback() {
+  function FavoriteEditorFallback({
+    availableEditors = editors,
+  }: {
+    availableEditors?: readonly EditorId[];
+  }) {
     useOpenFavoriteEditorShortcut({
       enabled: true,
       environmentId: selected,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
-      availableEditors: editors,
+      availableEditors,
       openInCwd: "/work/project",
     });
     return null;
@@ -191,6 +195,46 @@ describe("host editor access", () => {
 });
 
 describe("remote editor links", () => {
+  it("opens Tower on the destination host from the picker and fallback without an SSH route", async () => {
+    await using fixture = await setup();
+    const {
+      screen,
+      renderPicker,
+      byLabel,
+      menuItems,
+      click,
+      pressOpenFavorite,
+      FavoriteEditorFallback,
+    } = fixture;
+    state.remote = { mode: "remote-unavailable" };
+    state.clientEditors = [];
+    state.allowed.add(selected);
+    await renderPicker(["tower"]);
+    using _timers = fakeTimers();
+    await click(byLabel("Choose project app"));
+    await vi.waitFor(() =>
+      expect(menuItems().map((item) => item.textContent)).toEqual(["TowerCtrl+O"]),
+    );
+    await click(menuItems()[0]!);
+    expect(state.run).toHaveBeenLastCalledWith({
+      environmentId: selected,
+      input: { cwd: "/work/project", editor: "tower" },
+    });
+    await act(async () => screen.rerender(<FavoriteEditorFallback availableEditors={["tower"]} />));
+    expect((await pressOpenFavorite()).defaultPrevented).toBe(true);
+    expect(state.run).toHaveBeenCalledTimes(2);
+    expect(state.openUrl).not.toHaveBeenCalled();
+    state.allowed.delete(selected);
+    await renderPicker(["tower"]);
+    expect(fixture.primaryButton().disabled).toBe(true);
+    await pressOpenFavorite();
+    expect(state.run).toHaveBeenCalledTimes(2);
+    await act(async () => vi.runAllTimers());
+    for (const region of document.querySelectorAll('body > [aria-live="polite"]')) {
+      region.textContent = "";
+    }
+  });
+
   it("opens the link from the fallback when the picker is not mounted", async () => {
     await using fixture = await setup();
     const { screen, pressOpenFavorite, FavoriteEditorFallback } = fixture;

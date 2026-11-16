@@ -23,6 +23,10 @@ import { readEnvironmentScope } from "./state/session";
 const LAST_EDITOR_KEY = "t3code:last-editor";
 const LAST_PROJECT_OPENER_KEY = "t3code:last-project-opener";
 
+export function isHostProjectOpener(editor: EditorId | null): boolean {
+  return editor === "ghostty" || editor === "tower";
+}
+
 export function availableFileEditors(
   availableEditors: ReadonlyArray<EditorId>,
 ): ReadonlyArray<EditorId> {
