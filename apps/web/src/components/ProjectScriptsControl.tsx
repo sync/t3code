@@ -1,3 +1,4 @@
+import { isProjectDeviceRunScript } from "@t3tools/shared/projectDeviceRun";
 import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
 import {
   AuthSettingsWriteScope,
@@ -201,28 +202,30 @@ export default function ProjectScriptsControl({
                     <MenuShortcut className="ms-0">{shortcutLabel}</MenuShortcut>
                   </span>
                 ))}
-              <span
-                className={`absolute right-0 top-1/2 flex -translate-y-1/2 ${presentation === "menu" ? "" : "opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:pointer-events-auto"}`}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="size-6"
-                  aria-label={`Edit ${script.name}`}
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    openEditDialog(script);
-                  }}
+              {!isProjectDeviceRunScript(script) && (
+                <span
+                  className={`absolute right-0 top-1/2 flex -translate-y-1/2 ${presentation === "menu" ? "" : "opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:pointer-events-auto"}`}
                 >
-                  <SettingsIcon className="size-3.5" />
-                </Button>
-              </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="size-6"
+                    aria-label={`Edit ${script.name}`}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openEditDialog(script);
+                    }}
+                  >
+                    <SettingsIcon className="size-3.5" />
+                  </Button>
+                </span>
+              )}
             </span>
           </MenuItem>
         );
@@ -246,7 +249,11 @@ export default function ProjectScriptsControl({
               onClick={() => onRunScript?.(primaryScript)}
             >
               <ScriptIcon icon={primaryScript.icon} className="size-4" />
-              <MenuItemLabel>Run {primaryScript.name}</MenuItemLabel>
+              <MenuItemLabel>
+                {isProjectDeviceRunScript(primaryScript)
+                  ? primaryScript.name
+                  : `Run ${primaryScript.name}`}
+              </MenuItemLabel>
               <MenuShortcut>
                 {shortcutLabelForCommand(keybindings, commandForProjectScript(primaryScript.id))}
               </MenuShortcut>
@@ -292,7 +299,11 @@ export default function ProjectScriptsControl({
                   part="primary"
                   panel={isPanel}
                   className={isPanel ? undefined : "w-7 sm:w-6 @3xl/header-actions:w-auto!"}
-                  aria-label={`Run ${primaryScript.name}`}
+                  aria-label={
+                    isProjectDeviceRunScript(primaryScript)
+                      ? primaryScript.name
+                      : `Run ${primaryScript.name}`
+                  }
                   // Tooltip replaces the button data-slot, so toolbar theming needs a separate hook.
                   data-toolbar-control=""
                   aria-disabled={!onRunScript || undefined}
@@ -460,7 +471,7 @@ export default function ProjectScriptsControl({
       <ProjectScriptEditorDialog
         environmentId={environmentId}
         request={editorRequest}
-        scripts={scripts}
+        scripts={scripts.filter((script) => !isProjectDeviceRunScript(script))}
         onSubmit={submitScript}
         onDelete={(scriptId) => void onDeleteScript(scriptId)}
         onClose={() => setEditorRequest(null)}

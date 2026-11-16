@@ -49,6 +49,7 @@ import {
   canPickExternalProjectFavicon,
   ProjectFaviconPickerDialog,
 } from "./ProjectFaviconPickerDialog";
+import { ProjectDeviceRunSettings } from "./ProjectDeviceRunSettings";
 import { ProjectActionsSettings } from "./ProjectActionsSettings";
 import { ProjectDefaultsSettings } from "./ProjectDefaultsSettings";
 import {
@@ -665,6 +666,7 @@ function ProjectDetail({
           ) : null}
         </SettingsSection>
         <ProjectDefaultsSettings category="project" />
+        <ProjectDeviceRunSettings />
         <ProjectActionsSettings />
         {checkoutChoices}
         <SettingsSection title="Danger">

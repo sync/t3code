@@ -1,3 +1,4 @@
+import { ProjectDeviceRunSettings } from "./ProjectDeviceRunSettings";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { AppText as Text, AppTextInput } from "../../components/ui/AppText";
 import { Button } from "../../components/ui/Button";
@@ -375,6 +376,8 @@ function ProjectOverviewContent(props: {
           />
         </SettingsSection>
       ) : null}
+
+      <ProjectDeviceRunSettings members={props.members} environments={props.environments} />
 
       <SettingsSection title="Checkouts">
         {props.members.map((member, index) => {

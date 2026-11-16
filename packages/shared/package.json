@@ -582,6 +582,10 @@
     "./pinOrderKey": {
       "types": "./src/pinOrderKey.ts",
       "import": "./src/pinOrderKey.ts"
+    },
+    "./projectDeviceRun": {
+      "types": "./src/projectDeviceRun.ts",
+      "import": "./src/projectDeviceRun.ts"
     }
   },
   "scripts": {

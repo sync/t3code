@@ -2,6 +2,12 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import {
+  isProjectDeviceRunScript,
+  type ProjectDeviceRunScript,
+} from "@t3tools/shared/projectDeviceRun";
+import { ProjectDeviceRunDialog } from "../device/ProjectDeviceRunDialog";
+import { useState } from "react";
 import type { Dispatch } from "react";
 import type { ComposerHandleRef } from "../../composerHandleContext";
 import type { selectThreadTerminalUiState } from "../../terminalUiStateStore";
@@ -201,6 +207,11 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     storeCloseTerminal(activeThreadRef, terminalId);
     focusActiveDrawerTerminal(activeThreadRef);
   };
+  const [deviceRun, setDeviceRun] = useState<{
+    key: string;
+    script: ProjectDeviceRunScript;
+  } | null>(null);
+  const deviceRunKey = `${environmentId}:${activeThreadId}`;
   const runProjectScript = async (
     script: ProjectScript,
     options?: {
@@ -213,6 +224,10 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     },
   ) => {
     if (!hasTerminalWriteAccess() || !activeThreadId || !activeProject || !activeThread) return;
+    if (isProjectDeviceRunScript(script) && !options?.env) {
+      setDeviceRun({ key: deviceRunKey, script });
+      return;
+    }
     if (options?.rememberAsLastInvoked !== false) {
       setLastInvokedScriptByProjectId((current) => {
         if (current[activeProject.id] === script.id) return current;
@@ -459,6 +474,16 @@ export function useChatTerminalActions(input: ChatTerminalActionsInput) {
     requestClosePanelTerminalStable,
     requestCloseTerminalStable,
     runProjectScriptStable,
+    deviceRunDialog:
+      activeThreadRef && deviceRun?.key === deviceRunKey ? (
+        <ProjectDeviceRunDialog
+          key={`${deviceRunKey}:${deviceRun.script.id}`}
+          threadRef={activeThreadRef}
+          script={deviceRun.script}
+          onClose={() => setDeviceRun(null)}
+          onRun={(script, env) => runProjectScript(script, { env, preferNewTerminal: true })}
+        />
+      ) : null,
     runShellCommandStable,
     setTerminalOpenStable,
     splitPanelTerminalStable,

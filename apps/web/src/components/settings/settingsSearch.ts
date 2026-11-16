@@ -1249,6 +1249,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     scope: "project-defaults",
   },
   {
+    id: "project-device-run",
+    title: "Run on device",
+    to: "/settings/projects",
+    searchTerms: ["ios android simulator emulator device build port command"],
+  },
+  {
     id: "project-actions",
     title: "Actions",
     to: "/settings/projects",

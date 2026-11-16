@@ -119,6 +119,7 @@ import {
 } from "@t3tools/client-runtime/environment";
 import { formatModelSlugName, resolveSelectableModel } from "@t3tools/shared/model";
 import { projectScriptCwd, resolveProjectScripts } from "@t3tools/shared/projectScripts";
+import { projectDeviceRunScripts } from "@t3tools/shared/projectDeviceRun";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { orchestrationV2WorktreePending } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveThreadReferenceCopyTarget } from "@t3tools/client-runtime/thread-reference";
@@ -1147,6 +1148,9 @@ export default function ChatView(props: ChatViewProps) {
     activeProject ?? undefined,
   );
   const activeProjectScripts = activeProject ? resolveProjectScripts(settings, activeProject) : [];
+  const activeProjectRunScripts = activeProject
+    ? [...activeProjectScripts, ...projectDeviceRunScripts(activeProjectSettings.settings)]
+    : [];
   const { projectCloneBannerItem, projectCloneSendBlockReason } =
     useProjectCloneBanner(activeProjectRef);
   const activeProjectDefaultModelSelection =
@@ -1938,6 +1942,7 @@ export default function ChatView(props: ChatViewProps) {
     closePanelTerminalStable,
     lastInvokedScriptByProjectId,
     runProjectScriptStable,
+    deviceRunDialog,
     runShellCommandStable,
     splitPanelTerminalStable,
     splitPanelTerminalVerticalStable,
@@ -2804,7 +2809,7 @@ export default function ChatView(props: ChatViewProps) {
     fallback: (command) => {
       const scriptId = projectScriptIdFromCommand(command);
       if (!scriptId || !activeProject || !canOperateTerminal) return undefined;
-      const script = activeProjectScripts.find((entry) => entry.id === scriptId);
+      const script = activeProjectRunScripts.find((entry) => entry.id === scriptId);
       return script ? () => void runProjectScriptStable(script) : undefined;
     },
   });
@@ -3911,7 +3916,7 @@ export default function ChatView(props: ChatViewProps) {
                   {...(draftId ? { draftId } : {})}
                   composerDraftTarget={composerDraftTarget}
                   activeProjectName={activeProject?.title}
-                  activeProjectScripts={activeProject ? activeProjectScripts : undefined}
+                  activeProjectScripts={activeProject ? activeProjectRunScripts : undefined}
                   preferredScriptId={
                     activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
                   }
@@ -4081,6 +4086,7 @@ export default function ChatView(props: ChatViewProps) {
         worktreePath={activeThread?.worktreePath ?? null}
         onConfirm={onConfirmRevertStable}
       />
+      {deviceRunDialog}
       {embedded ? null : <LinkPullRequestDialogHost />}
       <ThreadVisitWatermark threadRef={routeThreadRef} />
       <ExpandedImageDialogHost threadKey={routeThreadKey} />

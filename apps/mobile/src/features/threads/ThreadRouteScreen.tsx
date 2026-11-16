@@ -1,3 +1,10 @@
+import {
+  projectDeviceRunScripts,
+  isProjectDeviceRunScript,
+  type ProjectDeviceRunScript,
+} from "@t3tools/shared/projectDeviceRun";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
+import { ProjectDeviceRunSheet } from "../devices/ProjectDeviceRunSheet";
 import * as Dialog from "../../components/ui/Dialog";
 import { useRememberThreadProject } from "./useRememberThreadProject";
 import { useOpenPullRequest } from "../../native/useOpenPullRequest";
@@ -751,7 +758,15 @@ function ThreadRouteContent(
     });
   };
 
-  const handleRunProjectScript = async (script: ProjectScript) => {
+  const [deviceRun, setDeviceRun] = useState<{
+    key: string;
+    script: ProjectDeviceRunScript;
+  } | null>(null);
+  const deviceRunKey = `${selectedThread?.environmentId}:${selectedThread?.id}`;
+  const handleRunProjectScript = async (
+    script: ProjectScript,
+    extraEnv?: Record<string, string>,
+  ) => {
     if (
       !selectedThread ||
       !selectedThreadProject?.workspaceRoot ||
@@ -760,9 +775,14 @@ function ThreadRouteContent(
       return;
     }
 
+    if (isProjectDeviceRunScript(script) && !extraEnv) {
+      setDeviceRun({ key: deviceRunKey, script });
+      return;
+    }
     const targetTerminalId = resolveProjectScriptTerminalId({
       existingTerminalIds: terminalMenuSessions.map((session) => session.terminalId),
-      ...(knownTerminalSessions === null ||
+      ...(extraEnv ||
+      knownTerminalSessions === null ||
       !readEnvironmentScope(selectedThread.environmentId, AuthTerminalReadScope)
         ? { uniqueSuffix: uuidv4() }
         : {}),
@@ -781,6 +801,7 @@ function ThreadRouteContent(
     const env = projectScriptRuntimeEnv({
       project: { cwd: selectedThreadProject.workspaceRoot },
       worktreePath: preferredWorktreePath,
+      ...(extraEnv ? { extraEnv } : {}),
     });
     stagePendingTerminalLaunch({
       target: {
@@ -820,10 +841,18 @@ function ThreadRouteContent(
     canOperateTerminal,
     canOpenFiles: Boolean(selectedThreadProject?.workspaceRoot),
     projectScripts: selectedThreadProject
-      ? resolveProjectScripts(
-          routeEnvironmentRuntime?.serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
-          selectedThreadProject,
-        )
+      ? [
+          ...resolveProjectScripts(
+            routeEnvironmentRuntime?.serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
+            selectedThreadProject,
+          ),
+          ...projectDeviceRunScripts(
+            resolveProjectSettings(
+              routeEnvironmentRuntime?.serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS,
+              selectedThreadProject.id,
+            ).settings,
+          ),
+        ]
       : [],
     terminalSessions: terminalMenuSessions,
     onOpenTerminal: handleOpenTerminal,
@@ -1006,6 +1035,15 @@ function ThreadRouteContent(
   const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
   const renderThreadRouteBody = () => (
     <>
+      {deviceRun?.key === deviceRunKey && (
+        <ProjectDeviceRunSheet
+          key={`${deviceRunKey}:${deviceRun.script.id}`}
+          threadRef={{ environmentId: selectedThread.environmentId, threadId: selectedThread.id }}
+          script={deviceRun.script}
+          onClose={() => setDeviceRun(null)}
+          onRun={handleRunProjectScript}
+        />
+      )}
       <GitActionProgressOverlay
         progress={gitActionProgress}
         onDismiss={dismissGitActionResult}
