@@ -831,6 +831,32 @@ function webSearchPatterns(item: CodexWebSearchItem): ReadonlyArray<string> {
   }
 }
 
+function webSearchResults(item: CodexWebSearchItem) {
+  return (item.results ?? []).flatMap((result) => {
+    if (
+      result === null ||
+      typeof result !== "object" ||
+      !("url" in result) ||
+      typeof result.url !== "string" ||
+      !result.url.trim()
+    ) {
+      return [];
+    }
+    return [
+      {
+        url: result.url.trim(),
+        ...("ref_id" in result && typeof result.ref_id === "string" && result.ref_id.trim()
+          ? { referenceId: result.ref_id.trim() }
+          : {}),
+        ...("title" in result && typeof result.title === "string" ? { title: result.title } : {}),
+        ...("snippet" in result && typeof result.snippet === "string"
+          ? { snippet: result.snippet }
+          : {}),
+      },
+    ];
+  });
+}
+
 const decodeTurnApprovalPolicy = Schema.decodeUnknownEffect(
   Schema.Union([CodexSchema.V2TurnStartParams__AskForApproval, Schema.Null]),
 );
@@ -1624,6 +1650,7 @@ type CodexWebSearchItem = {
   readonly id: string;
   readonly type: "webSearch";
   readonly query?: string | null;
+  readonly results?: ReadonlyArray<Schema.Json> | null;
   readonly action?:
     | CodexSchema.V2ItemStartedNotification__WebSearchAction
     | CodexSchema.V2ItemCompletedNotification__WebSearchAction
@@ -4565,6 +4592,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             });
             const { ordinal, startedAt } = yield* resolveItemPosition(input.context, input.item.id);
             const patterns = webSearchPatterns(input.item);
+            const results = webSearchResults(input.item);
             const { status } = input;
             const node: OrchestrationV2ExecutionNode = {
               id: nodeId,
@@ -4600,6 +4628,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               updatedAt,
               type: "web_search",
               ...(patterns.length === 0 ? {} : { patterns: [...patterns] }),
+              ...(results.length === 0 ? {} : { results }),
             };
             return { node, turnItem };
           },

@@ -69,6 +69,11 @@ export const SCENARIOS = [
     name: "Command output",
     file: "./dev-replay/command_output_transcript.ndjson",
   },
+  {
+    id: "web-citation",
+    name: "Web citation",
+    file: "./dev-replay/web_citation_transcript.ndjson",
+  },
 ] as const;
 
 // Session setup and vendor state stay out: they would replace the replay agent's own models.

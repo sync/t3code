@@ -1,4 +1,8 @@
 import { shouldPreserveAssistantLineBreaks } from "@t3tools/shared/assistantInsights";
+import {
+  codexWebCitationSources,
+  renderCodexWebCitationsAsMarkdown,
+} from "@t3tools/shared/codexWebCitations";
 import { MessageId, type TurnItemId } from "@t3tools/contracts";
 import { canForkProjectedAssistantItem } from "@t3tools/client-runtime/state/thread-workflows";
 import { agentWorkingDirectories } from "@t3tools/client-runtime/workspace-basename-lookup";
@@ -25,6 +29,8 @@ import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
 import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
 
+const NO_CITATION_ITEMS: ReturnType<typeof readThreadTurnItems> = [];
+
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const gt = useGT();
@@ -34,6 +40,11 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
     row.projectedItem?.item.id,
   );
   const text = liveText ?? row.message.text;
+  const citationItems =
+    text.includes("\ue200") && ctx.threadRef
+      ? readThreadTurnItems(ctx.threadRef)
+      : NO_CITATION_ITEMS;
+  const citationSources = codexWebCitationSources(citationItems, row.projectedItem?.item);
   const messageText =
     text || (row.message.streaming || row.suppressEmptyResponse ? "" : gt("(empty response)"));
 
@@ -50,7 +61,7 @@ export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind
             listRef={ctx.listRef}
           >
             <ChatMarkdown
-              text={messageText}
+              text={renderCodexWebCitationsAsMarkdown(messageText, citationSources)}
               renderInsights
               cwd={ctx.markdownCwd}
               agentDirectories={() =>
@@ -225,6 +236,7 @@ function AssistantMessageMeta({
       ) : null}
       <AssistantCopyButton
         message={message}
+        projectedItem={projectedItem}
         showCopyButton={showCopyButton}
         streaming={copyStreaming}
       />
@@ -313,15 +325,26 @@ function AssistantStatusBadge({ status }: { status: string }) {
 
 function AssistantCopyButton({
   message,
+  projectedItem,
   showCopyButton,
   streaming,
 }: {
   message: ChatMessage;
+  projectedItem: Extract<TimelineRow, { kind: "message" }>["projectedItem"];
   showCopyButton: boolean;
   streaming: boolean;
 }) {
+  const ctx = use(TimelineRowCtx);
   const assistantCopyState = resolveAssistantMessageCopyState({
-    text: message.text ?? null,
+    text:
+      showCopyButton && !streaming
+        ? renderCodexWebCitationsAsMarkdown(
+            message.text,
+            message.text.includes("\ue200") && ctx.threadRef
+              ? codexWebCitationSources(readThreadTurnItems(ctx.threadRef), projectedItem?.item)
+              : [],
+          )
+        : message.text,
     showCopyButton,
     streaming,
   });

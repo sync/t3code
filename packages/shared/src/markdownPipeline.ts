@@ -9,6 +9,7 @@ import type {
   Text,
 } from "mdast";
 import { remarkKeepWindowsPaths } from "./markdownWindowsPaths.ts";
+import { remarkCodexWebCitations } from "./codexWebCitations.ts";
 import { type PluggableList, type Processor, type Transformer, unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
@@ -106,6 +107,7 @@ export const CHAT_MARKDOWN_REMARK_PLUGINS: PluggableList = [
   remarkNormalizeListItemIndentation,
   remarkCodexDirectives,
   remarkBreakAroundImageLines,
+  remarkCodexWebCitations,
   remarkPreserveCodeMeta,
   remarkNormalizeLinksAndTagInlineCode,
 ];
@@ -123,6 +125,7 @@ export const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS: PluggableList = [
   remarkNormalizeListItemIndentation,
   remarkCodexDirectives,
   remarkBreakAroundImageLines,
+  remarkCodexWebCitations,
   remarkBreaks,
   remarkPreserveCodeMeta,
   remarkNormalizeLinksAndTagInlineCode,

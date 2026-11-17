@@ -122,6 +122,16 @@ describe.each([
 });
 
 describe("native Markdown adapters", () => {
+  it("renders missing web citation sources without exposing provider reference tokens", () => {
+    const markdown = "Any configured remote. \ue200cite\ue202turn316369view1\ue201";
+    expect(renderCodexInlineDirectivesAsMarkdown(markdown)).toBe(
+      "Any configured remote. [source unavailable]",
+    );
+    expect(renderCodexDirectivesForCopy(markdown)).toBe(
+      "Any configured remote. [source unavailable]",
+    );
+  });
+
   it("renders follow-up suggestions as their label Markdown", () => {
     expect(
       renderCodexInlineDirectivesAsMarkdown(

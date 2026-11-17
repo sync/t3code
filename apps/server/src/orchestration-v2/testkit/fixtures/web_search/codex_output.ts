@@ -38,4 +38,13 @@ export function assertWebSearchOutput(
   assert.lengthOf(webSearchItems, 1);
   assert.equal(webSearchItems[0]?.status, "completed");
   assert.deepEqual(webSearchItems[0]?.patterns, [WEB_SEARCH_QUERY]);
+  assert.deepInclude(
+    webSearchItems[0]?.results?.find((result) => result.referenceId === "turn0search2"),
+    {
+      referenceId: "turn0search2",
+      title:
+        "New ticket pricing tier introduced for fans of qualified teams at FIFA World Cup 2026™",
+      url: "https://tickets.fifa.com/organisation/news/world-cup-2026-new-ticket-pricing-tier-fans-qualified-teams",
+    },
+  );
 }
