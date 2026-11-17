@@ -15,6 +15,7 @@ import {
   type CodexArtifactTemplate,
 } from "./codexArtifactTemplates.ts";
 import { codexFileCitationMarkdown, resolveCodexFileCitationLink } from "./codexFileCitations.ts";
+import { renderCodexWebCitationsAsMarkdown } from "./codexWebCitations.ts";
 
 const COLON = 58;
 const DASH = 45;
@@ -337,6 +338,7 @@ function renderDirectiveMatches(
 }
 
 export function renderCodexInlineDirectivesAsMarkdown(markdown: string): string {
+  markdown = renderCodexWebCitationsAsMarkdown(markdown);
   if (
     !markdown.includes(`:${CODEX_FILE_CITATION_NAME}`) &&
     !markdown.includes(`:${CODEX_FOLLOW_UP_NAME}`)
@@ -348,6 +350,7 @@ export function renderCodexInlineDirectivesAsMarkdown(markdown: string): string 
 }
 
 export function renderCodexDirectivesForCopy(markdown: string): string {
+  markdown = renderCodexWebCitationsAsMarkdown(markdown);
   if (
     !markdown.includes(`:${CODEX_FILE_CITATION_NAME}`) &&
     !markdown.includes(`:${CODEX_FOLLOW_UP_NAME}`) &&

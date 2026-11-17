@@ -1644,6 +1644,7 @@ export const OrchestrationV2FileSearchResult = Schema.Struct({
 export type OrchestrationV2FileSearchResult = typeof OrchestrationV2FileSearchResult.Type;
 
 export const OrchestrationV2WebSearchResult = Schema.Struct({
+  referenceId: Schema.optional(TrimmedNonEmptyString),
   title: Schema.optional(Schema.String),
   url: Schema.optional(TrimmedNonEmptyString),
   snippet: Schema.optional(Schema.String),

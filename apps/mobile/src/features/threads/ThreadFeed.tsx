@@ -48,6 +48,10 @@ import * as Haptics from "expo-haptics";
 import { KeyboardAwareLegendList } from "@legendapp/list/keyboard";
 import { useViewabilityAmount, type LegendListRef } from "@legendapp/list/react-native";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  codexWebCitationSources,
+  renderCodexWebCitationsAsMarkdown,
+} from "@t3tools/shared/codexWebCitations";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import {
   IDLE_COMPACTING_LABELS,
@@ -2108,7 +2112,22 @@ function renderFeedEntry(
     const { message } = entry;
     const isUser = message.role === "user";
     const presentation = resolveUserMessagePresentation(message);
-    const renderedText = renderAssistantCitationsAsText(presentation.text);
+    const citationText = renderAssistantCitationsAsText(presentation.text);
+    const renderedText = isUser
+      ? citationText
+      : renderCodexWebCitationsAsMarkdown(
+          citationText,
+          citationText.includes("\ue200")
+            ? codexWebCitationSources(
+                appAtomRegistry.get(
+                  environmentThreadDetails.quietThreadAtom(
+                    scopeThreadRef(props.environmentId, props.threadId),
+                  ),
+                )?.projection.visibleTurnItems ?? [],
+                message.projectedItem?.item,
+              )
+            : [],
+        );
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;
     const timestampLabel = props.formatMessageTime(isUser ? message.createdAt : message.updatedAt);
     const attachments = message.attachments ?? [];

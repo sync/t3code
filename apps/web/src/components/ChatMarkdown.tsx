@@ -9,6 +9,7 @@ import {
   inlineCodeFilePathCandidate,
 } from "@t3tools/shared/markdownLinks";
 import { taskListMarkerOffset } from "@t3tools/shared/markdownTaskList";
+import { remarkCodexWebCitations } from "@t3tools/shared/codexWebCitations";
 import { isHostPath, resolveWorkspaceFilePath } from "@t3tools/shared/path";
 import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 import {
@@ -53,6 +54,7 @@ import {
   type ScopedThreadRef,
   type ServerProviderSkill,
   type ThreadPullRequestKey,
+  type OrchestrationV2WebSearchResult,
 } from "@t3tools/contracts";
 import {
   isAtomCommandInterrupted,
@@ -239,6 +241,7 @@ interface ChatMarkdownProps {
   /** Compact markdown transforms remove blocks before rendering inside a label. */
   inline?: boolean;
   text: string;
+  webCitationSources?: ReadonlyArray<OrchestrationV2WebSearchResult> | undefined;
   cwd: string | undefined;
   /** Folders the agent worked in before writing `text`, the latest first; read when a link opens. */
   agentDirectories?: (() => ReadonlyArray<string>) | undefined;
@@ -278,6 +281,7 @@ export interface ChatMarkdownContextReference {
 
 const EMPTY_MARKDOWN_SKILLS: ReadonlyArray<ServerProviderSkill> = [];
 const EMPTY_REMARK_PLUGINS: NonNullable<ReactMarkdownOptions["remarkPlugins"]> = [];
+const EMPTY_WEB_CITATION_SOURCES: ReadonlyArray<OrchestrationV2WebSearchResult> = [];
 
 const ARTIFACT_TEMPLATE_ICON_BY_KIND = {
   document: FileTextIcon,
@@ -1855,6 +1859,7 @@ const MarkdownSource = memo(function MarkdownSource({
 
 function ChatMarkdown({
   text,
+  webCitationSources = EMPTY_WEB_CITATION_SOURCES,
   className,
   inline = false,
   lineBreaks = false,
@@ -1863,6 +1868,10 @@ function ChatMarkdown({
   renderInsights = false,
   ...props
 }: ChatMarkdownProps) {
+  const citationPlugins: PluggableList =
+    webCitationSources.length > 0
+      ? [[remarkCodexWebCitations, { sources: webCitationSources }]]
+      : EMPTY_REMARK_PLUGINS;
   const { componentState, handleCopy, markdownRef, localMediaPreview, closeLocalMediaPreview } =
     useChatMarkdownState({ text, inline, ...props });
   const hasInsights = renderInsights && text.includes("★ Insight");
@@ -1896,7 +1905,7 @@ function ChatMarkdown({
     ];
   // The incremental parser keeps per-instance state, so its output is not shared.
   const uncachedPlugins = incrementalParsing;
-  const remarkPlugins = incrementalParsing
+  const baseRemarkPlugins = incrementalParsing
     ? [...sharedRemarkPlugins, ...extraRemarkPlugins, createIncrementalMarkdownPlugin()]
     : withExtraPlugins(
         hasInsights
@@ -1904,6 +1913,7 @@ function ChatMarkdown({
           : sharedRemarkPlugins,
         extraRemarkPlugins,
       );
+  const remarkPlugins = withExtraPlugins(baseRemarkPlugins, citationPlugins);
   const blocks = streamingBlocks ?? [text];
 
   return (

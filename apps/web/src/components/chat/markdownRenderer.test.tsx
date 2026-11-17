@@ -53,7 +53,7 @@ describe("createMarkdownRenderer", () => {
 
   it("renders what react-markdown renders while a reply streams through the incremental parser", () => {
     const reply =
-      "```ts\nconst a = 1;\n```\n\n| a | b |\n| - | - |\n| me@x.io | www.x.io |\n\nDone ~~now~~.";
+      "```ts\nconst a = 1;\n```\n\n| a | b |\n| - | - |\n| me@x.io | www.x.io |\n\nDone ~~now~~. \ue200cite\ue202turn316369view1\ue201";
     // As ChatMarkdown streams: one incremental plugin for the reply, a fresh renderer per update.
     const incremental = createIncrementalMarkdownPlugin();
     for (let end = 1; end <= reply.length; end++) {

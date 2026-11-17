@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import type { Link, Root, RootContent } from "mdast";
+import { remarkCodexWebCitations } from "./codexWebCitations.ts";
 import {
   CHAT_MARKDOWN_REHYPE_PLUGINS,
   CHAT_MARKDOWN_REMARK_PLUGINS,
@@ -13,6 +14,37 @@ import {
   remarkAssistantInsights,
   remarkEnableOrderedListNumbers,
 } from "./markdownPipeline.ts";
+
+it.each([
+  ["default", CHAT_MARKDOWN_REMARK_PLUGINS],
+  ["with breaks", CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS],
+] as const)("renders unavailable Codex web citations without private glyphs (%s)", (_, plugins) => {
+  const processor = unified().use(remarkParse).use(plugins);
+  const markdown = "Any configured remote. \ue200cite\ue202turn316369view1\ue201";
+  const tree = processor.runSync(processor.parse(markdown));
+  expect(JSON.stringify(tree)).not.toContain("\ue200cite");
+  expect(JSON.stringify(tree)).toContain("[source unavailable]");
+});
+
+it("resolves citation sources through the shared Markdown plugin configuration", () => {
+  const processor = unified()
+    .use(remarkParse)
+    .use(CHAT_MARKDOWN_REMARK_PLUGINS)
+    .use(remarkCodexWebCitations, {
+      sources: [{ referenceId: "turn316369view1", url: "https://git-scm.com/docs/git-config" }],
+    });
+  const tree = processor.runSync(
+    processor.parse("See \ue200cite\ue202turn316369view1\ue201"),
+  ) as Root;
+  const paragraph = tree.children[0];
+  expect(paragraph?.type).toBe("paragraph");
+  if (paragraph?.type !== "paragraph") return;
+  expect(paragraph.children).toContainEqual({
+    type: "link",
+    url: "https://git-scm.com/docs/git-config",
+    children: [{ type: "text", value: "git-scm.com" }],
+  });
+});
 
 it.each([
   ["default", CHAT_MARKDOWN_REMARK_PLUGINS],
