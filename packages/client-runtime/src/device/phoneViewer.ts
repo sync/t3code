@@ -98,15 +98,24 @@ export function createPhoneViewer(options: {
   let layout = phoneDisplayLayout(screen, options.source.width, options.source.height);
   let profile = options.profile ?? IOS_PHONE_SHAPE;
   let foldAngle = options.foldAngle ?? null;
-  let orientationAngle =
-    foldAngle !== null && profile.id.startsWith("android") ? 0 : layout.rotation;
+  const rawAspect = () => options.source.width / options.source.height;
+  const compatibleFoldAngle = (displayLayout = layout, shape = profile) => {
+    if (foldAngle === null || !shape.id.startsWith("android")) return null;
+    const aspect = rawAspect();
+    const matchesDisplay =
+      foldAngle >= 90
+        ? isFoldInnerAspect(aspect)
+        : aspect > 0 && aspect < 0.6 && !displayLayout.landscape;
+    return matchesDisplay ? foldAngle : null;
+  };
+  const initialFoldAngle = compatibleFoldAngle();
+  let orientationAngle = initialFoldAngle === null ? layout.rotation : 0;
   let orientationTurn: { from: number; to: number; startedAt: number } | null = null;
   let imported: Awaited<ReturnType<typeof loadDeviceModel>> | null = null;
   let modelSource = options.model ?? null;
   let accessory: Awaited<ReturnType<typeof loadDeviceModel>> | null = null;
   let accessoryBounds: Box3 | null = null;
   let foldTurn: { from: number; to: number; startedAt: number } | null = null;
-  const rawAspect = () => options.source.width / options.source.height;
   let foldAspect = isFoldInnerAspect(rawAspect()) ? rawAspect() : DEFAULT_FOLD_INNER_ASPECT;
   const createFoldScene = (angle: number, displayLayout = layout) =>
     createAndroidFoldScene(texture, displayLayout, angle, foldAspect);
@@ -117,8 +126,8 @@ export function createPhoneViewer(options: {
     return foldTurn.from + (foldTurn.to - foldTurn.from) * eased;
   };
   let phone: ReturnType<typeof createPhoneScene> | ReturnType<typeof createAndroidFoldScene> =
-    foldAngle !== null && profile.id.startsWith("android")
-      ? createFoldScene(foldAngle)
+    initialFoldAngle !== null
+      ? createFoldScene(initialFoldAngle)
       : createPhoneScene(texture, layout, profile);
   scene.add(phone.root);
   let disposed = false;
@@ -218,10 +227,13 @@ export function createPhoneViewer(options: {
   });
   const updateLayout = (nextProfile = profile) => {
     const next = phoneDisplayLayout(screen, options.source.width, options.source.height);
+    const nextFoldAngle = compatibleFoldAngle(next, nextProfile);
+    const foldSceneChanged = !imported && "setAngle" in phone !== (nextFoldAngle !== null);
     const resized =
       textureWidth !== options.source.width || textureHeight !== options.source.height;
     if (
       resized ||
+      foldSceneChanged ||
       nextProfile !== profile ||
       next.aspect !== layout.aspect ||
       next.rawLandscape !== layout.rawLandscape ||
@@ -238,8 +250,19 @@ export function createPhoneViewer(options: {
       const frameAspect = rawAspect();
       const innerChanged = isFoldInnerAspect(frameAspect) && frameAspect !== foldAspect;
       if (innerChanged) foldAspect = frameAspect;
-      if (!imported && "setAngle" in phone && innerChanged) {
-        const angle = visibleFoldAngle(foldAngle ?? 180);
+      if (foldSceneChanged) {
+        scene.remove(phone.root);
+        phone.dispose();
+        phone =
+          nextFoldAngle === null
+            ? createPhoneScene(texture, next, nextProfile)
+            : createFoldScene(nextFoldAngle, next);
+        scene.add(phone.root);
+        orientationTurn = null;
+        orientationAngle = nextFoldAngle === null ? next.rotation : 0;
+        foldTurn = null;
+      } else if (!imported && nextFoldAngle !== null && innerChanged) {
+        const angle = visibleFoldAngle(nextFoldAngle);
         scene.remove(phone.root);
         phone.dispose();
         phone = createFoldScene(angle, next);
@@ -256,7 +279,7 @@ export function createPhoneViewer(options: {
       } else {
         phone.setDisplay(texture, next);
       }
-      if (next.rotation !== layout.rotation) {
+      if (!foldSceneChanged && next.rotation !== layout.rotation) {
         if (nextProfile.id.startsWith("android") && !("setAngle" in phone) && !reducedMotion()) {
           const difference = Math.atan2(
             Math.sin(next.rotation - orientationAngle),
@@ -283,12 +306,13 @@ export function createPhoneViewer(options: {
     load: loadDeviceModel,
     onError: options.onModelError,
     install(model) {
+      const angle = compatibleFoldAngle();
       const next = disposed
         ? null
         : model
           ? createImportedPhoneScene(model.asset, texture, layout)
-          : foldAngle !== null && profile.id.startsWith("android")
-            ? createFoldScene(foldAngle)
+          : angle !== null
+            ? createFoldScene(angle)
             : createPhoneScene(texture, layout, profile);
       foldTurn = null;
       scene.remove(phone.root);
@@ -296,6 +320,8 @@ export function createPhoneViewer(options: {
       imported = model;
       if (!next) return;
       phone = next;
+      orientationTurn = null;
+      orientationAngle = "setAngle" in phone ? 0 : layout.rotation;
       scene.add(phone.root);
       if (accessory) {
         if (imported) phone.orientation.add(accessory.asset);
@@ -348,19 +374,11 @@ export function createPhoneViewer(options: {
     setFoldAngle(next) {
       if (disposed || next === foldAngle) return;
       const previous = foldAngle;
+      const previousScene = phone;
       foldAngle = next;
       if (imported) return;
-      if (next === null || !("setAngle" in phone)) {
-        scene.remove(phone.root);
-        phone.dispose();
-        phone = next === null ? createPhoneScene(texture, layout, profile) : createFoldScene(next);
-        scene.add(phone.root);
-        orientationTurn = null;
-        orientationAngle = next === null ? layout.rotation : 0;
-        foldTurn = null;
-        applyPose();
-        fit(true);
-      } else {
+      updateLayout();
+      if (phone === previousScene && "setAngle" in phone && next !== null) {
         const from = visibleFoldAngle(previous ?? next);
         if (reducedMotion()) {
           foldTurn = null;

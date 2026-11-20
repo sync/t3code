@@ -82,7 +82,7 @@ vi.mock("./modelScene.ts", async () => {
 
 import { Group, Quaternion } from "three";
 import { createPhoneViewer } from "./phoneViewer.ts";
-import { type DeviceShapeProfile } from "./shapeProfile.ts";
+import { ANDROID_PHONE_SHAPE, type DeviceShapeProfile } from "./shapeProfile.ts";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -91,7 +91,7 @@ afterEach(() => {
   models.pending.length = 0;
 });
 
-function fixture(profile?: DeviceShapeProfile) {
+function fixture(profile?: DeviceShapeProfile, foldAngle?: number) {
   const pending = new Map<number, FrameRequestCallback>();
   let id = 0;
   let now = 0;
@@ -110,6 +110,7 @@ function fixture(profile?: DeviceShapeProfile) {
     source,
     onUnavailable,
     onFramingAspect,
+    ...(foldAngle === undefined ? {} : { foldAngle }),
     ...(profile ? { profile } : {}),
   });
   const draw = (time = now) => {
@@ -130,6 +131,36 @@ function fixture(profile?: DeviceShapeProfile) {
     state: gpu.instances[0]!,
   };
 }
+
+it("only draws an unfolded Android frame while the stream has an inner display", () => {
+  const { viewer, source, draw, state, onFramingAspect } = fixture(ANDROID_PHONE_SHAPE, 180);
+  const hasInnerScreen = () =>
+    state.frames.at(-1)?.phone?.getObjectByName("continuous-inner-screen") !== undefined;
+
+  expect(hasInnerScreen()).toBe(false);
+  expect(onFramingAspect.mock.lastCall?.[0]).toBeLessThan(0.6);
+
+  source.width = 2076;
+  source.height = 2152;
+  viewer.frameUpdated();
+  draw();
+  expect(hasInnerScreen()).toBe(true);
+
+  source.width = 1080;
+  source.height = 2400;
+  viewer.frameUpdated();
+  draw();
+  expect(hasInnerScreen()).toBe(false);
+  expect(onFramingAspect.mock.lastCall?.[0]).toBeLessThan(0.6);
+
+  viewer.setFoldAngle(0);
+  draw();
+  expect(state.frames.at(-1)?.phone?.getObjectByName("cover-screen")?.visible).toBe(true);
+  viewer.setFoldAngle(180);
+  draw();
+  expect(hasInnerScreen()).toBe(false);
+  viewer.dispose();
+});
 
 it("rejects incompatible accessories and releases an accessory that finishes after detaching", async () => {
   const { viewer } = fixture();
