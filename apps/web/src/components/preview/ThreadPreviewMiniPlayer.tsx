@@ -3,7 +3,7 @@ import { m } from "~/i18n/messages";
 import { FILL_PREVIEW_VIEWPORT, type ScopedThreadRef } from "@t3tools/contracts";
 import { previewPdfAssetUrl } from "@t3tools/shared/preview";
 import { useEnvironmentHttpBaseUrl } from "~/state/environments";
-import { PanelRightIcon, PictureInPicture2, XIcon } from "lucide-react";
+import { PanelRightIcon, PictureInPicture2, PowerIcon, XIcon } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -39,6 +39,7 @@ import {
 } from "~/browser/serverPictureInPicture";
 import { useBrowserLayoutZoomFactor } from "~/browser/useBrowserLayoutZoomFactor";
 import { Button } from "~/components/ui/button";
+import { Menu, MenuItem, MenuPopup } from "~/components/ui/menu";
 import { toastManager } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -49,10 +50,13 @@ import {
   type PreviewMiniPlayerState,
   browserMiniPlayerSource,
   previewMiniPlayerSourceKey,
+  selectThreadPreviewMiniPlayer,
   usePreviewMiniPlayerStore,
 } from "~/previewMiniPlayerStore";
 import { useRightPanelStore } from "~/rightPanelStore";
-import { useDeviceState } from "~/state/device";
+import { deviceEnvironment, useDeviceState } from "~/state/device";
+import { formatEnvironmentQueryError } from "~/state/query";
+import { useAtomCommand } from "~/state/use-atom-command";
 
 import { DeviceStreamView } from "../device/DeviceStreamView";
 import type { DeviceScreenSize } from "@t3tools/client-runtime/device/stream";
@@ -385,6 +389,12 @@ function DeviceMiniPlayer({
   miniPlayer,
 }: Props & { readonly source: Extract<PreviewMiniPlayerSource, { kind: "device" }> }) {
   const gt = useGT();
+  const threadKey = scopedThreadKey(threadRef);
+  const [menu, setMenu] = useState<{ threadKey: string; x: number; y: number } | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const stopDevice = useAtomCommand(deviceEnvironment.close, { reportFailure: false });
+  const canStop = useAtomValue(deviceEnvironment.close.permissionAtom(threadRef.environmentId));
+  const menuPosition = menu?.threadKey === threadKey ? menu : null;
   const { state: deviceState } = useDeviceState(threadRef.environmentId);
   const viewId = miniPlayerDeviceViewId(threadRef, source);
   const screen = useAtomValue(deviceStreamScreenAtom(viewId));
@@ -397,8 +407,32 @@ function DeviceMiniPlayer({
   const cornerRadius = (player: PreviewMiniPlayerSize) =>
     resolveDeviceMiniPlayerCornerRadius(source.platform, player);
 
+  const removePreview = () => usePreviewMiniPlayerStore.getState().close(threadRef);
+  const stop = async () => {
+    if (stopping || !canStop) return;
+    setStopping(true);
+    const result = await stopDevice({
+      environmentId: threadRef.environmentId,
+      input: {
+        threadId: threadRef.threadId,
+        hostId: source.hostId,
+        deviceId: source.deviceId,
+        shutdown: true,
+      },
+    });
+    setStopping(false);
+    if (result._tag === "Failure") {
+      toastManager.add({ type: "error", title: formatEnvironmentQueryError(result.cause) });
+      return;
+    }
+    const store = usePreviewMiniPlayerStore.getState();
+    if (selectThreadPreviewMiniPlayer(store.byThreadKey, threadRef)?.source === source) {
+      store.close(threadRef);
+    }
+  };
+
   const openInPanel = () => {
-    usePreviewMiniPlayerStore.getState().close(threadRef);
+    removePreview();
     useRightPanelStore.getState().openDevice(threadRef, {
       hostId: source.hostId,
       deviceId: source.deviceId,
@@ -417,22 +451,55 @@ function DeviceMiniPlayer({
       cornerRadius={cornerRadius}
     >
       {() => (
-        <div
-          className="pointer-events-auto absolute inset-0 overflow-hidden rounded-[inherit]"
-          style={{ zIndex: PREVIEW_MINI_PLAYER_WEBVIEW_Z_INDEX }}
-        >
-          <DeviceStreamView
-            environmentId={threadRef.environmentId}
-            platform={source.platform}
-            deviceId={source.deviceId}
-            hostId={source.hostId}
-            deviceName={device?.name ?? source.name}
-            deviceDescription={`${hostLabel} · ${device?.version ?? source.platform}`}
-            visible
-            viewId={viewId}
-            serveSimOnly={host?.kind === "simlock"}
-          />
-        </div>
+        <>
+          <div
+            className="pointer-events-auto absolute inset-0 overflow-hidden rounded-[inherit]"
+            style={{ zIndex: PREVIEW_MINI_PLAYER_WEBVIEW_Z_INDEX }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setMenu({ threadKey, x: event.clientX, y: event.clientY });
+            }}
+          >
+            <DeviceStreamView
+              environmentId={threadRef.environmentId}
+              platform={source.platform}
+              deviceId={source.deviceId}
+              hostId={source.hostId}
+              deviceName={device?.name ?? source.name}
+              deviceDescription={`${hostLabel} · ${device?.version ?? source.platform}`}
+              visible
+              viewId={viewId}
+              serveSimOnly={host?.kind === "simlock"}
+            />
+          </div>
+          <Menu open={menuPosition !== null} onOpenChange={(open) => !open && setMenu(null)}>
+            <MenuPopup
+              align="start"
+              anchor={
+                menuPosition
+                  ? {
+                      getBoundingClientRect: () =>
+                        new DOMRect(menuPosition.x, menuPosition.y, 0, 0),
+                    }
+                  : undefined
+              }
+            >
+              <MenuItem onClick={removePreview}>
+                <XIcon />
+                <T>Remove</T>
+              </MenuItem>
+              <MenuItem
+                variant="destructive"
+                disabled={!canStop || stopping}
+                onClick={() => void stop()}
+              >
+                <PowerIcon />
+                <T>Stop</T>
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        </>
       )}
     </MiniPlayerShell>
   );

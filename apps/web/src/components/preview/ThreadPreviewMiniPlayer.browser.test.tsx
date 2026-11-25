@@ -9,8 +9,10 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/reactivity";
+import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { expect, it, vi } from "vite-plus/test";
+import { page } from "vite-plus/test/browser";
 
 import { act, render } from "../../../test/render";
 import {
@@ -27,9 +29,19 @@ import { ThreadPreviewMiniPlayer, useThreadPreviewCanvasSource } from "./ThreadP
 
 vi.mock(import("../device/DeviceStreamView"), () => ({
   DeviceStreamView: (({ viewId }: { viewId: string }) => (
-    <div data-testid="stream" data-view-id={viewId} />
+    <div className="size-full" data-testid="stream" data-view-id={viewId} />
   )) as never,
 }));
+
+const mocks = vi.hoisted(() => ({
+  close:
+    vi.fn<
+      (
+        input: unknown,
+      ) => Promise<{ _tag: "Success" } | { _tag: "Failure"; cause: Cause.Cause<unknown> }>
+    >(),
+}));
+vi.mock("~/state/use-atom-command", () => ({ useAtomCommand: () => mocks.close }));
 
 const threadRef = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-1"));
 const defaultThreadRef = threadRef;
@@ -153,4 +165,59 @@ it("keeps one stream when switching between threads floating the same device", a
   // The stream session is keyed by view, so a new view id reconnects the device.
   await screen.rerender(harness(otherThreadRef));
   expect(viewId()).toBe(first);
+});
+
+it("removes the floating device or stops it from the screen's context menu", async ({
+  onTestFinished,
+}) => {
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  onTestFinished(() => page.viewport(viewport.width, viewport.height));
+  await page.viewport(1200, 800);
+  mocks.close.mockReset();
+  using _state = vi
+    .spyOn(deviceEnvironment, "state")
+    .mockReturnValue(Atom.make<AsyncResult.AsyncResult<DeviceServiceState>>(AsyncResult.initial()));
+  using _permission = vi
+    .spyOn(deviceEnvironment.close, "permissionAtom")
+    .mockReturnValue(Atom.make(true));
+  using _store = {
+    [Symbol.dispose]: () => usePreviewMiniPlayerStore.getState().removeThread(threadRef),
+  };
+  usePreviewMiniPlayerStore.getState().open(threadRef, phone);
+  const container = document.createElement("div");
+  container.style.cssText = "display:flex;position:fixed;inset:0;width:1200px;height:800px";
+  await using screen = await render(
+    <RegistryContext.Provider value={appAtomRegistry}>
+      <Harness />
+    </RegistryContext.Provider>,
+    { container },
+  );
+  const stream = screen.getByTestId("stream");
+  const stop = page.getByRole("menuitem", { name: "Stop", exact: true });
+
+  await stream.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove", exact: true }).click();
+  await expect.element(stream).not.toBeInTheDocument();
+  expect(mocks.close).not.toHaveBeenCalled();
+
+  await act(() => usePreviewMiniPlayerStore.getState().open(threadRef, phone));
+  mocks.close.mockResolvedValueOnce({
+    _tag: "Failure",
+    cause: Cause.fail(new Error("Device host is reconnecting")),
+  });
+  await stream.click({ button: "right" });
+  await stop.click();
+  await expect.element(stream).toBeVisible();
+
+  const stopped = Promise.withResolvers<{ _tag: "Success" }>();
+  mocks.close.mockReturnValueOnce(stopped.promise);
+  await stream.click({ button: "right" });
+  await stop.click();
+  expect(mocks.close).toHaveBeenLastCalledWith({
+    environmentId: threadRef.environmentId,
+    input: { threadId: threadRef.threadId, hostId: "local", deviceId: "phone", shutdown: true },
+  });
+  await expect.element(stream).toBeVisible();
+  await act(() => stopped.resolve({ _tag: "Success" }));
+  await expect.element(stream).not.toBeInTheDocument();
 });
